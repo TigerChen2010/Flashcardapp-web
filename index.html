@@ -1,4 +1,4 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="Flashcards with a forgetting-curve revision schedule, by Tiger Chen."><script>/* Flashcards website (flashcard-spaced-repetition.com): local image store in IndexedDB,
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="description" content="Flashcards with a forgetting-curve revision schedule, by Tiger Chen."><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icons/espresso-light-180.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Flashcards"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="theme-color" content="#F2EDE8"><script>/* Flashcards website (flashcard-spaced-repetition.com): local image store in IndexedDB,
    and Google sign-in with Google Identity Services (token client, no secret) for Drive sync. */
 (function(){
  if(window.desktop)return;
@@ -4575,6 +4575,94 @@ function gsPanel(){
 }
 if(window.__FC_TEST)window.__fcTest={get state(){return state;},getSet,saveSet,saveSettings,deleteSetDoc,gsSync,gsSignIn,GS};
 
+/* ================= Phone reminders (website only): Web Push through the Flashcards reminder sender =================
+   The page works out the next 7 days of reminder times and sends them (no sets, just times + short texts)
+   to push.flashcard-spaced-repetition.com, which delivers them even when the app is closed. */
+const PUSH_API="https://push.flashcard-spaced-repetition.com", PR_KEY=LS+".push";
+const PR={supported:false,standalone:false,ios:false,on:false,id:null,last:"",busy:false,err:"",t:null,started:false};
+const isWeb=()=>document.documentElement.classList.contains("webapp");
+const ICON_SET=["claude-dark","claude-light","collegiate-light","drafting-light","espresso-dark","espresso-light","oxford-light","reading-dark","reading-light","retro-dark","retro-light","terminal-dark","walnut-dark","walnut-light"];
+/* Home Screen icon follows the colour scheme at the moment you add it (iPhone keeps that icon afterwards) */
+function prIcon(){if(!isWeb())return;const sc=getScheme(state.settings.scheme).k,mode=effectiveDark()?"dark":"light";
+ const name=ICON_SET.includes(sc+"-"+mode)?sc+"-"+mode:ICON_SET.includes(sc+"-"+(mode==="dark"?"light":"dark"))?sc+"-"+(mode==="dark"?"light":"dark"):"espresso-light";
+ let l=document.querySelector('link[rel="apple-touch-icon"]');if(!l){l=document.createElement("link");l.rel="apple-touch-icon";document.head.appendChild(l);}l.href="/icons/"+name+"-180.png";
+ let m=document.querySelector('meta[name="theme-color"]');if(!m){m=document.createElement("meta");m.name="theme-color";document.head.appendChild(m);}m.content=getComputedStyle(document.documentElement).getPropertyValue("--bg").trim()||"#F2EDE8";}
+function prLoad(){try{const o=JSON.parse(localStorage.getItem(PR_KEY))||{};PR.on=!!o.on;PR.id=o.id||null;PR.last=o.last||"";}catch(e){}}
+function prSave(){try{localStorage.setItem(PR_KEY,JSON.stringify({on:PR.on,id:PR.id,last:PR.last}));}catch(e){}}
+const prRid=()=>{const a=new Uint8Array(16);crypto.getRandomValues(a);return[...a].map(x=>x.toString(16).padStart(2,"0")).join("");};
+const prKey=s=>{s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";const b=atob(s),a=new Uint8Array(b.length);for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);return a;};
+async function prInit(){if(!isWeb()||PR.started)return;PR.started=true;prLoad();
+ PR.ios=/iP(hone|ad|od)/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+ PR.standalone=matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+ PR.supported="serviceWorker"in navigator&&"PushManager"in window&&"Notification"in window;
+ if("serviceWorker"in navigator&&(location.protocol==="https:"||location.hostname==="localhost")){try{await navigator.serviceWorker.register("/sw.js");}catch(e){}}
+ if(PR.on&&(!PR.supported||Notification.permission!=="granted")){PR.on=false;prSave();}
+ prIcon();
+ if(PR.on)prSchedule(true);
+ setInterval(()=>prSchedule(false),30*60e3);
+ document.addEventListener("visibilitychange",()=>{if(!document.hidden)prSchedule(false);});
+}
+function prHM(s){const m=/^(\d{1,2}):(\d{2})$/.exec(s||"");return m?[+m[1],+m[2]]:null;}
+function prItems(){
+ const n=state.settings.notif||{};if(!n.enabled)return[];
+ const out=[],now=Date.now(),G=goalN(),st=streakInfo(),doneToday=state.game.days[dayKey()]||0;
+ const quiet=d=>{const f=prHM(n.quietFrom),t=prHM(n.quietTo);if(!f||!t)return false;const x=d.getHours()*60+d.getMinutes(),a=f[0]*60+f[1],b=t[0]*60+t[1];return a===b?false:a<b?(x>=a&&x<b):(x>=a||x<b);};
+ for(let i=0;i<7;i++){
+  const day=new Date();day.setHours(0,0,0,0);day.setDate(day.getDate()+i);
+  const t=prHM(n.time);
+  if(t){const d=new Date(day);d.setHours(t[0],t[1],0,0);const at=d.getTime();
+   if(at>now&&!quiet(d)){const due=state.sets.filter(s=>s.ladder&&s.ladder.next&&s.ladder.next<=at).sort((a,b)=>a.ladder.next-b.ladder.next);
+    if(due.length&&due.length>=(+n.threshold||1))out.push({at,title:due.length===1?"1 set due for revision":due.length+" sets due for revision",body:due.slice(0,3).map(s=>s.title).join(" · ")+(due.length>3?` · +${due.length-3} more`:""),tag:"due",url:"/"});}}
+  if(n.streak){[n.s1,n.s2].forEach((s,j)=>{const tt=prHM(s);if(!tt)return;const d=new Date(day);d.setHours(tt[0],tt[1],0,0);const at=d.getTime();if(at<=now)return;
+   if(i===0&&st.todayDone)return;
+   const left=i===0?Math.max(1,G-doneToday):G,run=i===0?st.n:0;
+   out.push({at,title:j===0?"Keep your streak going":"Last call for today's streak",body:run>0?`${left} more card${left===1?"":"s"} today keeps your ${run}-day streak.`:`${left} card${left===1?"":"s"} today to keep your streak.`,tag:"streak",url:"/"});});}
+ }
+ /* if the app isn't opened for 3 days */
+ const idle=new Date(now+3*DAY),it=prHM(n.time)||[19,0];idle.setHours(it[0],it[1],0,0);
+ out.push({at:idle.getTime(),title:"Your flashcards miss you",body:"A few minutes today keeps everything you've learned fresh.",tag:"idle",url:"/"});
+ /* one notification per moment: a streak nudge at the same time as a revision reminder joins it */
+ const merged=[];out.sort((a,b)=>a.at-b.at).forEach(x=>{const same=merged.find(y=>y.at===x.at);
+  if(same&&same.tag==="due"&&x.tag==="streak")same.body+=" · Streak: "+x.body.charAt(0).toLowerCase()+x.body.slice(1);
+  else if(same&&same.tag==="streak"&&x.tag==="due"){same.tag="due";same.title=x.title;same.body=x.body+" · Streak: "+same.body.charAt(0).toLowerCase()+same.body.slice(1);}
+  else if(same&&x.tag==="idle"){}else merged.push(x);});
+ return merged.slice(0,60);
+}
+async function prSchedule(force){if(!PR.on||!PR.id||!booted)return;const items=prItems(),sig=JSON.stringify(items.map(x=>[x.at,x.title,x.body]));
+ if(!force&&sig===PR.last)return;
+ try{const r=await fetch(PUSH_API+"/api/schedule",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:PR.id,items})});
+  if(r.status===404){await prResubscribe(items);}
+  else if(r.ok){PR.last=sig;prSave();}}catch(e){}}
+function prTouch(){if(!PR.on)return;clearTimeout(PR.t);PR.t=setTimeout(()=>prSchedule(false),3000);}
+async function prSubscription(){const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();
+ if(!sub){const kr=await fetch(PUSH_API+"/api/key");if(!kr.ok)throw new Error("Couldn't reach the reminder server");const {key}=await kr.json();sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:prKey(key)});}
+ return sub;}
+async function prResubscribe(items){const sub=await prSubscription();PR.id=PR.id||prRid();
+ const r=await fetch(PUSH_API+"/api/subscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:PR.id,sub:sub.toJSON(),items:items||prItems()})});
+ if(!r.ok)throw new Error("Couldn't reach the reminder server");PR.last=JSON.stringify((items||prItems()).map(x=>[x.at,x.title,x.body]));prSave();}
+async function prEnable(){if(PR.busy)return;PR.busy=true;PR.err="";
+ try{const perm=await Notification.requestPermission();
+  if(perm!=="granted"){PR.err=PR.ios?"Notifications are off for Flashcards. Turn them on in the iPhone's Settings → Notifications → Flashcards, then try again.":"Notifications are blocked for this site. Allow them in the browser's site settings, then try again.";return;}
+  if(!state.settings.notif.enabled){state.settings.notif.enabled=true;saveSettings();}
+  await prResubscribe();PR.on=true;prSave();toast("Reminders are on");}
+ catch(e){PR.err=(e&&e.message)||"Couldn't turn on reminders";}
+ finally{PR.busy=false;render();}}
+async function prDisable(){PR.busy=true;try{const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();if(sub)await sub.unsubscribe();}catch(e){}
+ try{if(PR.id)await fetch(PUSH_API+"/api/unsubscribe",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:PR.id})});}catch(e){}
+ PR.on=false;PR.last="";PR.busy=false;prSave();toast("Reminders are off on this device");render();}
+async function prTest(){try{const r=await fetch(PUSH_API+"/api/test",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:PR.id})});const j=await r.json().catch(()=>({}));
+ if(r.status===404){await prResubscribe();return prTest();}
+ toast(j.ok?"Test sent. It should arrive in a few seconds.":"The test didn't go through. Try turning reminders off and on.");}catch(e){toast("Couldn't reach the reminder server");}}
+function prPanel(){if(!isWeb())return"";
+ let body;
+ if(PR.ios&&!PR.standalone)body=`<div class="setting col"><div class="sm"><b>Add Flashcards to your Home Screen first</b><span>iPhones only send reminders from apps on the Home Screen. In Safari: tap the Share button (the square with an arrow) → Add to Home Screen → Add. Then open Flashcards from the new icon and come back here.</span></div></div>`;
+ else if(!PR.supported)body=`<div class="setting"><div class="sm"><b>Not available here</b><span>This browser can't show reminders. Try Chrome, Edge or Safari, or add the site to your Home Screen.</span></div></div>`;
+ else if(PR.on)body=`<div class="setting"><div class="sm"><b>Reminders are on</b><span>Revision and streak reminders arrive even when Flashcards is closed. Times are in Notifications below.</span></div><button class="switch on" data-act="pr-off" role="switch" aria-checked="true" aria-label="Phone reminders"></button></div>
+  <div class="setting"><div class="sm"><b>Test</b><span>Sends one now.</span></div><button class="btn" data-act="pr-test">${ic("bell",16)}Send a test</button></div>`;
+ else body=`<div class="setting"><div class="sm"><b>Get reminders on this device</b><span>Revision and streak reminders, even when Flashcards is closed.${PR.err?" "+esc(PR.err):""}</span></div><button class="btn primary" data-act="pr-on" ${PR.busy?"disabled":""}>${ic("bell",16)}Turn on reminders</button></div>`;
+ return`<section class="panel"><h2 class="h2">Phone reminders</h2>${body}</section>`;}
+{const _applyTheme=applyTheme;applyTheme=function(){const r=_applyTheme.apply(this,arguments);try{prIcon();}catch(e){}return r;};}
+
 /* ================= router ================= */
 let view={name:"home"};
 let session=null, preview=null, setUI={filter:"all",sort:"orig"}, draft=null, imp=null, modal=null, post=null;
@@ -4610,6 +4698,7 @@ function render(){
  if(view.name==="library")wireLibraryDrag();
  if(view.name==="edit")wireCardDrag();
  phoneEnhance();
+ prTouch();
  chartUI.animate=false;
  if(post){const p=post;post=null;p();}
 }
@@ -5122,6 +5211,7 @@ function vSettings(){
  const st=state.settings,n=st.notif;
  return`<section class="sec" style="gap:6px"><span class="eyebrow">Preferences</span><h1 class="h1">Settings</h1></section>
  ${gsPanel()}
+ ${prPanel()}
  <section class="panel"><h2 class="h2">Appearance</h2>
   <div class="setting"><div class="sm"><b>Your name</b><span>Used in the greeting on Home. Leave blank for none.</span></div><input id="s-name" class="inp" style="max-width:200px" maxlength="30" placeholder="Your name" value="${esc(st.name||"")}" autocomplete="off"></div>
   <div class="setting col"><div class="sm"><b>Colour scheme</b><span>The palettes from IB Tracker. Some come in light and dark, some in only one.</span></div>${schemePicker("set-scheme")}</div>
@@ -5144,10 +5234,10 @@ function vSettings(){
   <div class="setting"><div class="sm"><b>Show desktop widget</b><span>A small tile on your desktop with your streak and today's due sets. It sits behind all your windows and never shows in Mission Control or ⌘Tab. Only on this Mac.</span></div><button class="switch ${state.settings.widget!==false?"on":""}" data-act="widget-toggle" role="switch" aria-checked="${state.settings.widget!==false}" aria-label="Show desktop widget"></button></div>
   <div class="setting"><div class="sm"><b>Position</b><span>Drag the widget to a new spot. It snaps into the slot under your clock widget when you get close.${deskWidget.pinned===false?" Its buttons don't work on this Mac right now, so it shows your streak only.":""}</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="widget-move" ${state.settings.widget!==false?"":"disabled"}>Adjust position</button><button class="btn ghost" data-act="widget-reset" ${state.settings.widget!==false?"":"disabled"}>${ic("reset",16)}Reset</button></div></div></section>`:""}
  <section class="panel"><h2 class="h2">Notifications</h2>
-  <div class="setting"><div class="sm"><b>Reminders</b><span>${DESK?(WIN?"Windows notifications, even with the window closed. To stop them, right-click the Flashcards icon in the tray (bottom-right, by the clock) → Quit.":"Mac notifications, even with the window closed. Quit with ⌘Q to stop them."):"For now, reminders show inside the app while it's open. The Mac app sends real notifications."}</span></div><button class="switch ${n.enabled?"on":""}" data-act="notif-toggle" role="switch" aria-checked="${n.enabled}" aria-label="Reminders"></button></div>
+  <div class="setting"><div class="sm"><b>Reminders</b><span>${DESK?(WIN?"Windows notifications, even with the window closed. To stop them, right-click the Flashcards icon in the tray (bottom-right, by the clock) → Quit.":"Mac notifications, even with the window closed. Quit with ⌘Q to stop them."):(isWeb()?"Used for phone reminders (see Phone reminders above) and alerts inside the app.":"For now, reminders show inside the app while it's open. The Mac app sends real notifications.")}</span></div><button class="switch ${n.enabled?"on":""}" data-act="notif-toggle" role="switch" aria-checked="${n.enabled}" aria-label="Reminders"></button></div>
   <div class="setting"><div class="sm"><b>Revision reminder</b><span>Once a day, at this time or later, when sets are due.</span></div><input type="time" id="n-time" class="inp time" value="${esc(n.time)}" ${n.enabled?"":"disabled"}></div>
   <div class="setting"><div class="sm"><b>Only remind when at least</b><span>So one due set doesn't nag you.</span></div><div style="display:flex;align-items:center;gap:8px"><input type="number" id="n-thr" class="num" min="1" max="500" value="${n.threshold}" ${n.enabled?"":"disabled"}><span class="dim">sets due</span></div></div>
-  ${DESK?`<div class="setting"><div class="sm"><b>Streak reminders</b><span>If today's goal isn't done yet: a nudge, then a last call.</span></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><button class="switch ${n.streak?"on":""}" data-act="streak-notif" role="switch" aria-checked="${!!n.streak}" aria-label="Streak reminders" ${n.enabled?"":"disabled"}></button><input type="time" id="n-s1" class="inp time" value="${esc(n.s1||"")}" ${n.enabled&&n.streak?"":"disabled"}><input type="time" id="n-s2" class="inp time" value="${esc(n.s2||"")}" ${n.enabled&&n.streak?"":"disabled"}></div></div>`:""}
+  ${DESK||isWeb()?`<div class="setting"><div class="sm"><b>Streak reminders</b><span>If today's goal isn't done yet: a nudge, then a last call.</span></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><button class="switch ${n.streak?"on":""}" data-act="streak-notif" role="switch" aria-checked="${!!n.streak}" aria-label="Streak reminders" ${n.enabled?"":"disabled"}></button><input type="time" id="n-s1" class="inp time" value="${esc(n.s1||"")}" ${n.enabled&&n.streak?"":"disabled"}><input type="time" id="n-s2" class="inp time" value="${esc(n.s2||"")}" ${n.enabled&&n.streak?"":"disabled"}></div></div>`:""}
   <div class="setting"><div class="sm"><b>Quiet hours</b><span>No revision reminders between these times.</span></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><input type="time" id="n-qf" class="inp time" value="${esc(n.quietFrom)}" ${n.enabled?"":"disabled"}><span class="dim">to</span><input type="time" id="n-qt" class="inp time" value="${esc(n.quietTo)}" ${n.enabled?"":"disabled"}></div></div>
   ${DESK?`<div class="setting"><div class="sm"><b>Open at login</b><span>${WIN?"Starts quietly in the tray when you sign in to Windows, so reminders arrive even if you haven't opened the app.":"Starts quietly in the background so reminders arrive even if you haven't opened the app."}</span></div><button class="switch ${deskLogin?"on":""}" data-act="login-toggle" role="switch" aria-checked="${deskLogin}" aria-label="Open at login"></button></div>
   <div class="setting"><div class="sm"><b>Test</b><span>Check that ${WIN?"Windows":"macOS"} lets Flashcards show notifications.</span></div><button class="btn" data-act="notif-test">${ic("bell",16)}Send a test</button></div>`:""}</section>
@@ -5185,7 +5275,7 @@ const PHONE_Q=window.matchMedia("(max-width:620px)");
 const PF_KEY=LS_UI+".phonefolds";
 let pfState={};try{pfState=JSON.parse(localStorage.getItem(PF_KEY))||{};}catch(e){}
 /* which sections fold on a phone, and whether they start open */
-const PF_OPEN_DEFAULT={"Account & sync":true,"Appearance":false,"Revision schedule":false,"Streaks and diamonds":false,"Notifications":false,"Data":false,"Desktop widget":false,"Forgetting curves":false,"Next 30 days":true};
+const PF_OPEN_DEFAULT={"Account & sync":true,"Phone reminders":true,"Appearance":false,"Revision schedule":false,"Streaks and diamonds":false,"Notifications":false,"Data":false,"Desktop widget":false,"Forgetting curves":false,"Next 30 days":true};
 function phoneEnhance(){
  const phone=PHONE_Q.matches;
  const sp=$("#q");if(sp){if(!sp.dataset.ph)sp.dataset.ph=sp.placeholder;sp.placeholder=phone?"Search":sp.dataset.ph;}
@@ -5636,6 +5726,9 @@ const A={
  "fx-cancel":()=>{const s=fxState;fxClose();if(s){const ta=$(`.efield[data-i="${s.i}"][data-f="${s.f}"] textarea`);if(ta)ta.focus();}},
  "dock-toggle":()=>{state.settings.dockIcon=state.settings.dockIcon===false;saveSettings();syncDock();render();},
  "row-more":el=>{const row=el.closest(".lib-row,.fold-head");if(!row)return;const on=row.classList.toggle("acts-open");el.setAttribute("aria-expanded",String(on));},
+ "pr-on":()=>prEnable(),
+ "pr-off":()=>prDisable(),
+ "pr-test":()=>prTest(),
  "gs-signin":()=>gsSignIn(),
  "gs-signout":()=>gsSignOut(),
  "gs-sync":()=>{gsSync();},
@@ -5921,7 +6014,7 @@ applyTheme();
 if(booted){sortAll();render();}
 initAssets();
 document.documentElement.spellcheck=false;document.body.spellcheck=false;
-initCloud().then(()=>{setTimeout(checkAlert,1500);gsStart();});
+initCloud().then(()=>{setTimeout(checkAlert,1500);gsStart();prInit();});
 })();
 </script>
 </body></html>
