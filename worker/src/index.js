@@ -1,9 +1,10 @@
-/* Flashcards reminder sender (Cloudflare Worker).
+/* Flashcards + IB Tracker reminder sender (Cloudflare Worker).
    Phones register with an anonymous id + their Web Push subscription, then send their upcoming reminder
    times. Every 5 minutes the cron sends whatever is due. No names, no sets: only times and short texts.
    The VAPID signing key is created by the Worker itself on first use and kept in KV (never in the repo). */
 
-const ORIGINS = ["https://flashcard-spaced-repetition.com", "https://www.flashcard-spaced-repetition.com", "https://flashcardapp-web.pages.dev"];
+const ORIGINS = ["https://flashcard-spaced-repetition.com", "https://www.flashcard-spaced-repetition.com", "https://flashcardapp-web.pages.dev",
+  "https://ib-tracker.com", "https://www.ib-tracker.com", "https://ibtracker-web.pages.dev"];
 const SUBJECT = "https://flashcard-spaced-repetition.com";
 const MAX_ITEMS = 80, MAX_AHEAD = 9 * 864e5, LATE_OK = 3 * 36e5;
 
@@ -95,7 +96,8 @@ async function handle(req, env) {
   if (url.pathname === "/api/test") {
     const cur = await env.KV.get(k, "json");
     if (!cur) return json(req, { error: "not subscribed" }, 404);
-    const st = await sendPush(env, cur.sub, { title: "Reminders are on", body: "This is what a Flashcards reminder looks like.", tag: "test", url: "/" });
+    const ib = b.app === "ib";
+    const st = await sendPush(env, cur.sub, { title: "Reminders are on", body: ib ? "This is what an IB Tracker reminder looks like." : "This is what a Flashcards reminder looks like.", tag: "test", url: "/" });
     if (st === 404 || st === 410) await env.KV.delete(k);
     return json(req, { ok: st >= 200 && st < 300, status: st });
   }
