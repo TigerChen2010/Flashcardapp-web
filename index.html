@@ -48,6 +48,7 @@
   signIn:async()=>{await ask("select_account");const r=await fetch("https://openidconnect.googleapis.com/v1/userinfo",{headers:{Authorization:"Bearer "+tok.access}});const me=r.ok?await r.json():{};
    user={email:me.email||"",name:me.name||"",picture:me.picture||""};wr(K_USER,user);return user;},
   reconnect:()=>ask(""),
+  expired:()=>!!user&&!valid(),
   signOut:async()=>{const t=tok;user=null;tok=null;wr(K_USER,null);wr(K_TOK,null);try{if(t&&window.google)google.accounts.oauth2.revoke(t.access,()=>{});}catch(e){}return true;},
   fetch:gfetch};
 })();
@@ -4554,9 +4555,18 @@ async function gsStart(){
  if(GS.user)gsSync();
  setInterval(()=>{if(GS.user&&!document.hidden)gsSync();},3*60*1000);
  document.addEventListener("visibilitychange",()=>{if(!document.hidden&&GS.user)gsSync();});
- /* website: Google access lasts an hour; the next click quietly renews it */
- if(A.reconnect)document.addEventListener("pointerdown",()=>{if(GS.paused&&GS.user&&!GS.reconnecting){GS.reconnecting=true;A.reconnect().then(()=>{GS.paused=false;gsSync();}).catch(()=>{}).finally(()=>{GS.reconnecting=false;});}},true);
+ /* website: Google access lasts an hour; the next tap quietly renews it.
+    iPhone Safari only allows the Google window from a finished tap ("click"), not pointerdown. */
+ if(A.reconnect)document.addEventListener("click",e=>{const t=e.target&&e.target.closest&&e.target.closest('[data-act="gs-reconnect"],[data-act="gs-signin"],[data-act="gs-signout"]');if(t)return;
+  if(GS.user&&(GS.paused||(A.expired&&A.expired())))gsReconnect(false);},true);
 }
+/* one reconnect at a time; a Google window that never answers stops blocking after 20s */
+function gsReconnect(loud){const A=gsAuth();if(!A||!A.reconnect||!GS.user)return;
+ if(GS.reconnecting&&Date.now()-GS.reconnecting<20000)return;const mine=GS.reconnecting=Date.now();
+ const to=new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error("Google didn't answer. Tap again to retry."),{code:"timeout"})),20000));
+ Promise.race([A.reconnect(),to]).then(()=>{GS.paused=false;GS.err="";gsSync();})
+  .catch(e=>{GS.paused=true;if(loud)toast((e&&e.message)||"Couldn't reconnect");gsUI();})
+  .finally(()=>{if(GS.reconnecting===mine)GS.reconnecting=0;});}
 async function gsSignIn(){const A=gsAuth();if(!A)return;
  try{GS.err="";const p=A.signIn();toast(A.kind==="mac"?"Finish signing in in your browser":"Choose your Google account");const u=await p;GS.user=u;GS.paused=false;gsUI();toast("Signed in as "+(u.email||"Google"));gsSync();}
  catch(e){if(e&&e.code!=="cancel")toast((e&&e.message)||"Couldn't sign in");gsUI();}}
@@ -5732,7 +5742,7 @@ const A={
  "gs-signin":()=>gsSignIn(),
  "gs-signout":()=>gsSignOut(),
  "gs-sync":()=>{gsSync();},
- "gs-reconnect":()=>{const A=gsAuth();if(A&&A.reconnect)A.reconnect().then(()=>{GS.paused=false;gsSync();}).catch(e=>toast((e&&e.message)||"Couldn't reconnect"));},
+ "gs-reconnect":()=>{GS.reconnecting=0;gsReconnect(true);},
  "gs-client":async()=>{const A=gsAuth(),i=$("#gs-secret");if(!A||!A.setClient||!i)return;const v=i.value.trim();if(!/^GOCSPX-/.test(v)){toast("That doesn't look like a client secret (it starts with GOCSPX-)");return;}await A.setClient(null,v);i.value="";GS.hasSecret=true;toast("Client secret saved on this Mac");render();},
  "widget-toggle":()=>{state.settings.widget=state.settings.widget===false;saveSettings();pushWidget();render();},
  "widget-move":()=>{if(DESK&&DESK.widgetMove){DESK.widgetMove();toast("Drag the widget on your desktop, then click Done on it");}},
