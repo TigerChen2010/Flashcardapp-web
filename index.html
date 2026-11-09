@@ -824,6 +824,21 @@ mark.hl .mx{background:transparent}
 .setup.su-theme .schemes{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
 @media (max-width:520px){.schemes,.setup.su-theme .schemes{grid-template-columns:1fr 1fr}.sw{height:52px}}
 @media (prefers-reduced-motion:reduce){*,::view-transition-old(main),::view-transition-new(main){transition:none!important;animation:none!important}.draw{stroke-dashoffset:0}.fadein,.modal{opacity:1}}
+/* swipe between cards (touch screens, full-screen Flashcards only) */
+#main[data-v="flashcards"] .fc-stage{position:relative;touch-action:pan-y}
+#main[data-v="flashcards"] .fc-stage *{touch-action:pan-y}
+#main[data-v="flashcards"]{overflow-x:clip}
+.fc-stage.sw-drag{will-change:transform}
+.fc-stage.sw-anim{transition:transform .2s cubic-bezier(.2,.7,.3,1),opacity .2s ease}
+.sw-tag{position:absolute;inset:0;border-radius:16px;pointer-events:none;opacity:0;z-index:5;display:flex;align-items:flex-start;padding:16px;border:2.5px solid transparent}
+.sw-tag b{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:4px 10px;border-radius:999px}
+.sw-tag.know{border-color:var(--good);background:var(--good-soft);justify-content:flex-start}
+.sw-tag.know b{background:var(--good);color:#fff}
+.sw-tag.learning{border-color:var(--warn);background:var(--warn-soft);justify-content:flex-end}
+.sw-tag.learning b{background:var(--warn);color:#fff}
+.enter-c{animation:inC .22s var(--ease)}
+@keyframes inC{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.fc-stage.sw-anim{transition-duration:.08s}}
 </style>
 
 <header class="top">
@@ -5544,6 +5559,59 @@ function tagModalHTML(s){const cur=s.tags||[];const sug=allTags().map(x=>x.t).fi
 let tagModalSet=null;
 function openTagModal(id){const s=getSet(id);if(!s)return;tagModalSet=id;openModal(tagModalHTML(s),null);modal.onClose=()=>{tagModalSet=null;softRender();};}
 function tagModalUpdate(fn){const s=getSet(tagModalSet);if(!s)return;s.tags=fn(s.tags||[]);saveSet(s);const d=$("#modal .dialog");if(d){d.innerHTML=tagModalHTML(s);const i=$("#tag-in");if(i)i.focus();}}
+
+/* ================= Swipe between cards (touch screens, full-screen Flashcards only) =================
+   One card per swipe: the card follows the finger (transform only, no re-render while dragging),
+   flies off past the line or on a quick flick, and new swipes are ignored until the next card is in. */
+{const _render=render;render=function(){const r=_render.apply(this,arguments);const m=$("#main");if(m)m.dataset.v=view.name;SW.renders++;return r;};}
+const SW={renders:0,id:null,el:null,x0:0,y0:0,dx:0,dy:0,lock:"",w:1,t:[],raf:0,busy:false,eatClick:0,tag:null};
+const swOn=()=>view.name==="flashcards"&&session&&!session.done&&!(session.opts&&session.opts.auto);
+function swReset(){if(SW.raf)cancelAnimationFrame(SW.raf);SW.raf=0;SW.id=null;SW.lock="";SW.dx=SW.dy=0;SW.t=[];}
+function swPaint(){SW.raf=0;const el=SW.el;if(!el)return;const S=session,track=S.opts.track;let dx=SW.dx;
+ /* nothing before the first card: rubber-band instead of sliding away */
+ if(!track&&dx>0&&S.i===0)dx=dx*0.25;
+ el.style.transform=`translate3d(${dx}px,0,0) rotate(${dx/SW.w*7}deg)`;
+ if(track&&SW.tag){const p=Math.min(1,Math.abs(dx)/(SW.w*0.28));const k=dx>0?"know":"learning";
+  if(SW.tag.dataset.k!==k){SW.tag.dataset.k=k;SW.tag.className="sw-tag "+k;SW.tag.innerHTML=`<b>${k==="know"?"Know":"Still learning"}</b>`;}
+  SW.tag.style.opacity=p.toFixed(3);}}
+document.addEventListener("pointerdown",e=>{
+ if(e.pointerType==="mouse"||!e.isPrimary||SW.busy||SW.id!==null||!swOn())return;
+ const st=e.target.closest&&e.target.closest(".fc-stage");if(!st||e.target.closest("button,a,input,textarea,img,.hl-bub"))return;
+ SW.id=e.pointerId;SW.el=st;SW.x0=e.clientX;SW.y0=e.clientY;SW.w=st.getBoundingClientRect().width||320;SW.t=[[e.timeStamp,e.clientX]];},true);
+document.addEventListener("pointermove",e=>{if(e.pointerId!==SW.id)return;
+ SW.dx=e.clientX-SW.x0;SW.dy=e.clientY-SW.y0;
+ if(!SW.lock){const ax=Math.abs(SW.dx),ay=Math.abs(SW.dy);
+  if(ay>12&&ay>ax){swReset();return;}                     /* vertical: let long cards scroll */
+  if(ax<12||ax<ay*1.3)return;
+  const sel=window.getSelection&&String(window.getSelection()||"");if(sel){swReset();return;} /* selecting text to highlight */
+  SW.lock="x";SW.x0+=SW.dx>0?12:-12;SW.dx=e.clientX-SW.x0;SW.el.classList.add("sw-drag");SW.el.classList.remove("sw-anim");
+  if(session.opts.track){SW.tag=document.createElement("div");SW.tag.className="sw-tag";SW.el.appendChild(SW.tag);}
+  try{SW.el.setPointerCapture(e.pointerId);}catch(er){}}
+ SW.t.push([e.timeStamp,e.clientX]);if(SW.t.length>6)SW.t.shift();
+ if(!SW.raf)SW.raf=requestAnimationFrame(swPaint);},true);
+function swEnd(e,cancel){if(e.pointerId!==SW.id)return;const el=SW.el,locked=SW.lock==="x";
+ if(!locked){swReset();return;}
+ SW.eatClick=Date.now();                                  /* the lift must not also flip the card */
+ if(SW.raf){cancelAnimationFrame(SW.raf);SW.raf=0;swPaint();}
+ const a=SW.t[0],b=SW.t[SW.t.length-1],v=b&&a&&b[0]>a[0]?(b[1]-a[1])/(b[0]-a[0]):0; /* px per ms, last ~6 moves */
+ const S=session,track=S.opts.track,dx=SW.dx,dir=dx>0?1:-1;
+ const blocked=!track&&dir>0&&S.i===0;
+ const go=!cancel&&!blocked&&(Math.abs(dx)>SW.w*0.28||(Math.abs(v)>0.55&&Math.abs(dx)>40&&Math.sign(v)===dir));
+ swReset();
+ el.classList.remove("sw-drag");el.classList.add("sw-anim");
+ if(!go){el.style.transform="";if(SW.tag)SW.tag.style.opacity="0";SW.tag=null;return;}
+ SW.busy=true;SW.tag=null;
+ el.style.transform=`translate3d(${dir*SW.w*1.25}px,0,0) rotate(${dir*12}deg)`;el.style.opacity="0";
+ let done=false;const fin=()=>{if(done)return;done=true;
+  if(view.name==="flashcards"&&session===S&&!S.done){
+   if(track)fcMark(dir>0?"know":"learning");else fcMove(dir>0?-1:1);
+   if(!S.done){const ent=$("#main .fc-stage");const w=ent&&ent.parentElement;if(w){w.className=w.className.replace(/\benter-[lr]\b/,"").trim()+" enter-c";}}}
+  setTimeout(()=>{SW.busy=false;},120);};               /* one card per swipe */
+ el.addEventListener("transitionend",fin,{once:true});setTimeout(fin,260);}
+document.addEventListener("pointerup",e=>swEnd(e,false),true);
+document.addEventListener("pointercancel",e=>swEnd(e,true),true);
+document.addEventListener("click",e=>{if(Date.now()-SW.eatClick<400&&e.target.closest&&e.target.closest(".fc-stage")){e.stopPropagation();e.preventDefault();SW.eatClick=0;}},true);
+if(window.__FC_TEST){const T=window.__fcTest||(window.__fcTest={});Object.defineProperties(T,{session:{get:()=>session},preview:{get:()=>preview},SW:{get:()=>SW}});T.setView=v=>{view=v;render();};}
 
 /* ================= import / export ================= */
 let deskLogin=false;
