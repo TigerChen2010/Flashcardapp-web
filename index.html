@@ -862,6 +862,12 @@ mark.hl .mx{background:transparent}
 .mq-q{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border-radius:14px;background:var(--card);box-shadow:var(--shadow);text-align:left;border:0;color:var(--text);cursor:pointer;font:inherit;transition:transform .12s var(--ease)}
 .mq-q:hover:not(:disabled){transform:translateY(-1px)}.mq-q:disabled{opacity:.55;cursor:default}
 .mq-q b{display:flex;gap:8px;align-items:center;font-size:14.5px}.mq-q span{font-size:12.5px;color:var(--muted)}
+.mq-row .mq-handle{width:26px;margin-left:2px}
+.mq-row[data-mqdrag]{padding-left:0}
+.mq-unf{border-radius:var(--r-md);transition:background-color .15s,box-shadow .15s}
+.mq-unf.drop-into{background:var(--accent-soft);box-shadow:0 0 0 2px var(--accent)}
+.mq-folder.drop-into>.mq-fold{background:var(--accent-soft);border-radius:var(--r-md);box-shadow:0 0 0 2px var(--accent)}
+.mq-row.drag-ghost{display:flex}
 .mq-folder{display:flex;flex-direction:column;gap:8px}
 .mq-fbody{display:grid;grid-template-rows:1fr;transition:grid-template-rows .3s var(--ease),opacity .22s ease}
 .mq-fbody>div{min-height:0;overflow:hidden;padding:2px 4px 6px;margin:-2px -4px -6px}
@@ -5840,24 +5846,24 @@ function mqResumeHTML(bid){const x=mqSavedExam();if(!x||(bid&&x.bank!==bid))retu
  return`<div class="alert" role="status">${ic("clock",16)}<span>Unfinished timed exam: <b>${esc(x.title)}</b> · ${n}/${x.items.length} answered · ${mqClock(left)} left</span><button class="btn sm primary" data-act="mq-resume">Resume</button><button class="btn sm ghost" data-act="mq-discard">Discard</button></div>`;}
 function mqRow(b){const n=(b.qs||[]).length,wrong=(b.qs||[]).filter(q=>mqStillWrong(b.id,q.id)).length,tried=(b.qs||[]).filter(q=>mqQAcc(b.id,q.id)!=null).length;
  const sub=[plural(n,"question")];if(b.example)sub.push("example");else{if(wrong)sub.push(`${wrong} still wrong`);if(tried<n&&tried)sub.push(`${n-tried} not tried`);}
- return`<div class="mq-row"><button class="mq-rm" data-act="mq-open" data-id="${b.id}"><b>${esc(b.title)}</b><span>${sub.join(" · ")}</span></button>${b.example?`<span class="chip">Example</span>`:mqPctChip(mqLastScore(b))}<button class="btn icon ghost sm" data-act="mq-menu" data-id="${b.id}" aria-label="More for ${esc(b.title)}">${ic("dots",18)}</button></div>`;}
+ return`<div class="mq-row" ${b.example?"":`data-mqdrag="${b.id}"`}>${b.example?"":`<span class="handle mq-handle" aria-label="Drag to move" title="Drag to reorder or drop into a folder"><span></span><span></span><span></span><span></span><span></span><span></span></span>`}<button class="mq-rm" data-act="mq-open" data-id="${b.id}"><b>${esc(b.title)}</b><span>${sub.join(" · ")}</span></button>${b.example?`<span class="chip">Example</span>`:mqPctChip(mqLastScore(b))}<button class="btn icon ghost sm" data-act="mq-menu" data-id="${b.id}" aria-label="More for ${esc(b.title)}">${ic("dots",18)}</button></div>`;}
 function vMq(){
  const banks=mqRealBanks(),all=mqBanks(),nq=banks.reduce((a,b)=>a+(b.qs||[]).length,0);
  const wrongN=mqPairs(all).filter(({b,q})=>mqStillWrong(b.id,q.id)).length;
  const weak=mqTopicAcc(mqPairs(all)).find(t=>t.acc!=null);
  const col=ui.mqCol||{};
- const folderHTML=f=>{const bs=banks.filter(b=>b.folderId===f.id);const closed=!!col[f.id];
-  return`<div class="mq-folder ${closed?"closed":""}"><div class="mq-fold"><button class="mq-fold-t" data-act="mq-fold" data-id="${f.id}" aria-expanded="${!closed}">${ic("chev",16)}<b>${esc(f.name)}</b><span class="dim">${plural(bs.length,"bank")}</span></button><button class="btn icon ghost sm" data-act="mq-fmenu" data-id="${f.id}" aria-label="More for folder ${esc(f.name)}">${ic("dots",18)}</button></div>
-  <div class="mq-fbody"><div><div class="rows">${bs.map(mqRow).join("")||`<p class="dim" style="margin:4px 2px;font-size:13px">No banks in this folder yet.</p>`}</div></div></div></div>`;};
- const unf=banks.filter(b=>!b.folderId||!mqFolder(b.folderId));
+ const folderHTML=f=>{const bs=banks.filter(b=>b.folderId===f.id).sort(mqByOrder);const closed=!!col[f.id];
+  return`<div class="mq-folder ${closed?"closed":""}"><div class="mq-fold"><button class="mq-fold-t" data-act="mq-fold" data-id="${f.id}" aria-expanded="${!closed}">${ic("chev",16)}<b>${esc(f.name)}</b><span class="dim">${plural(bs.length,"bank")}</span></button><button class="btn icon ghost sm" data-act="mq-sort-menu" data-scope="${f.id}" aria-label="Sort ${esc(f.name)}" title="Sort this folder">${ic("sort",16)}</button><button class="btn icon ghost sm" data-act="mq-fmenu" data-id="${f.id}" aria-label="More for folder ${esc(f.name)}">${ic("dots",18)}</button></div>
+  <div class="mq-fbody"><div><div class="rows" data-mqcont="${f.id}">${bs.map(mqRow).join("")||`<p class="dim" style="margin:4px 2px;font-size:13px">No banks in this folder yet.</p>`}</div></div></div></div>`;};
+ const unf=banks.filter(b=>!b.folderId||!mqFolder(b.folderId)).sort(mqByOrder);
  return`<section class="sec"><span class="eyebrow">${plural(banks.length,"bank")} · ${plural(state.mqf.length,"folder")} · ${plural(nq,"question")}</span><h1 class="h1">MCQ Question bank</h1>
  <p class="mq-desc">Exam-style questions with marked answers. To quiz yourself on your own cards, use Learn or Test inside a set.</p>
- <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="mq-new">${ic("plus",16)}New bank</button><button class="btn" data-act="mq-import">${MQ_DL}Import .mcq</button><button class="btn" data-act="mq-newfolder">${ic("folderPlus",16)}New folder</button></div></section>
+ <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="mq-new">${ic("plus",16)}New bank</button><button class="btn" data-act="mq-import">${MQ_DL}Import .mcq</button><button class="btn" data-act="mq-newfolder">${ic("folderPlus",16)}New folder</button>${banks.length>1?`<button class="btn" data-act="mq-sort-menu" data-scope="" aria-haspopup="menu">${ic("sort",16)}Sort <span class="dim" style="font-size:10px">▾</span></button>`:""}</div></section>
  ${mqResumeHTML()}
  <div class="mq-quick"><button class="mq-q" data-act="mq-redo" ${wrongN?"":"disabled"}><b>${ic("reset",16)}Redo wrong ones</b><span>${wrongN?plural(wrongN,"question")+" still wrong":"Nothing to redo yet"}</span></button><button class="mq-q" data-act="mq-mixed" ${all.length?"":"disabled"}><b>${ic("shuffle",16)}Mixed practice</b><span>Pick banks, topics and how many</span></button><button class="mq-q" data-act="go" data-v="mqstats"><b>${MQ_CHART}Stats &amp; AI prompt</b><span>${weak?`Weakest: ${esc(weak.t)} · ${Math.round(weak.acc*100)}%`:"Accuracy by topic, history, most missed"}</span></button></div>
  <section class="sec" style="gap:10px">
  ${state.mqf.map(folderHTML).join("")}
- ${unf.length?`<div class="sec" style="gap:8px">${state.mqf.length?`<span class="eyebrow" style="padding-top:4px">Unfiled</span>`:""}<div class="rows">${unf.map(mqRow).join("")}</div></div>`:""}
+ ${unf.length||state.mqf.length&&banks.length?`<div class="sec mq-unf" style="gap:8px">${state.mqf.length?`<span class="eyebrow" style="padding-top:4px">Unfiled</span>`:""}<div class="rows" data-mqcont="">${unf.map(mqRow).join("")}</div>${!unf.length?`<p class="drop-hint">Drop a bank here to take it out of its folder.</p>`:""}</div>`:""}
  ${!banks.length?`<div class="empty">No question banks yet. Import a .mcq file (Claude can make one from a past paper and its markscheme), or make a bank yourself.<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn primary" data-act="mq-import">${MQ_DL}Import .mcq</button><button class="btn" data-act="mq-new">${ic("plus",16)}New bank</button></div></div>`:""}
  ${ui.mqHideEx?"":`<div class="sec" style="gap:8px"><span class="eyebrow" style="padding-top:4px">Example</span><div class="rows">${mqRow(mqExample())}</div></div>`}
  </section>`;}
@@ -6215,7 +6221,7 @@ function mqBankMenu(id){const b=mqBank(id);if(!b)return;
  if(b.example){openModal(`<h2 class="h2">${esc(b.title)}</h2><p class="dim" style="margin:0">The example bank stays on this device. Hide it any time; you can bring it back in Settings.</p><div class="dialog-actions"><button class="btn ghost" data-act="modal-no">Close</button><button class="btn" data-act="mq-hide-ex">Hide example</button></div>`);return;}
  openModal(`<h2 class="h2">${esc(b.title)}</h2><div class="mq-menu"><button class="btn" data-act="mq-edit" data-id="${b.id}">${ic("edit",16)}Edit questions</button><button class="btn" data-act="mq-move" data-id="${b.id}">${ic("folder",16)}Move to folder</button><button class="btn" data-act="mq-export" data-id="${b.id}">${MQ_DL}Export .mcq</button><button class="btn" data-act="mq-reset" data-id="${b.id}">${ic("reset",16)}Reset answer history</button><button class="btn danger" data-act="mq-del" data-id="${b.id}">${ic("trash",16)}Delete bank</button></div><div class="dialog-actions"><button class="btn ghost" data-act="modal-no">Close</button></div>`);}
 const MQA={
- "mq-open":el=>{closeModal();ui.mqLast=el.dataset.id;saveUI();go({name:"mqbank",id:el.dataset.id});},
+ "mq-open":el=>{if(Date.now()-mqDragSup<300)return;closeModal();ui.mqLast=el.dataset.id;ui.mqOpened=ui.mqOpened||{};ui.mqOpened[el.dataset.id]=Date.now();saveUI();go({name:"mqbank",id:el.dataset.id});},
  "mq-open-q":el=>{const b=mqBank(el.dataset.b);if(!b)return;closeModal();ui.mqLast=b.id;saveUI();go({name:"mqbank",id:b.id,focusQ:el.dataset.q});},
  "mq-fold":el=>{ui.mqCol=ui.mqCol||{};const id=el.dataset.id;ui.mqCol[id]=!ui.mqCol[id];saveUI();const box=el.closest(".mq-folder");if(box)box.classList.toggle("closed",!!ui.mqCol[id]);el.setAttribute("aria-expanded",String(!ui.mqCol[id]));},
  "mq-new":()=>{view.folderId=null;mqEditInit(null);go({name:"mqedit"});},
@@ -6282,6 +6288,59 @@ const MQA={
  "mq-e-save":()=>mqEditSave(),
  "mq-e-cancel":()=>{const D=mqDraft;if(D){const used=new Set(D.orig?mqImgIds(mqBank(D.orig)):[]);deleteAssets((D.uploaded||[]).filter(x=>!used.has(x)));}mqDraft=null;go(D&&D.orig?{name:"mqbank",id:D.orig}:{name:"mq"});}
 };
+
+/* ---------- MCQ: sort once (like Library) and drag to reorder / into folders ---------- */
+const mqByOrder=(a,b)=>(a.order??0)-(b.order??0)||(a.created||0)-(b.created||0);
+function mqSaveQuiet(b){const u=b.updated;saveMqBank(b);b.updated=u;persistLocal();}
+let mqSortUndo=null,mqDragSup=0;
+function mqSortCmp(mode){const op=ui.mqOpened||{};return(a,b)=>{if(mode==="az")return natCmp(a.title,b.title);if(mode==="za")return natCmp(b.title,a.title);
+ const va=mode==="opened"?(op[a.id]||0):(a.updated||0),vb=mode==="opened"?(op[b.id]||0):(b.updated||0);return(vb-va)||natCmp(a.title,b.title);};}
+function mqApplySort(scope,mode){const snap=state.mqb.map(b=>[b.id,b.order]);const groups=scope?[scope]:[null,...state.mqf.map(f=>f.id)];
+ groups.forEach(fid=>{state.mqb.filter(b=>(b.folderId&&mqFolder(b.folderId)?b.folderId:null)===fid).sort(mqSortCmp(mode)).forEach((b,i)=>{if(b.order!==i){b.order=i;mqSaveQuiet(b);}});});
+ mqSortUndo=snap;render();const label=SORTS.find(x=>x[0]===mode)[1];
+ toast(`${scope?`Sorted “${mqFolder(scope).name}”`:"Sorted all banks"} by ${label}`,{action:"Undo",act:"mq-sort-undo"});}
+function mqOpenSortMenu(btn){const scope=btn.dataset.scope||"";const open=$("#sort-menu");closeSortMenu();if(open&&open.dataset.scope==="mq:"+scope)return;
+ const m=document.createElement("div");m.id="sort-menu";m.className="sort-menu";m.dataset.scope="mq:"+scope;m.setAttribute("role","menu");
+ m.innerHTML=`<div class="hd">${scope?`Sort “${esc(mqFolder(scope).name)}”`:"Sort all banks"}</div>${SORTS.map(([k,l,icn])=>`<button role="menuitem" data-act="mq-sort-apply" data-scope="${scope}" data-v="${k}"><i>${icn?ic(icn,15):`<span class="mono">${k==="az"?"A↓":"Z↓"}</span>`}</i>${l}</button>`).join("")}<div class="note">Sorts once${scope?"":" (inside every folder, and the unfiled banks)"}. You can still drag afterwards.</div>`;
+ document.body.appendChild(m);const r=btn.getBoundingClientRect(),w=m.offsetWidth;
+ m.style.left=Math.max(8,Math.min(r.left+scrollX,scrollX+innerWidth-w-8))+"px";m.style.top=(r.bottom+scrollY+6)+"px";const f=m.querySelector("button");if(f)f.focus({preventScroll:true});}
+function mqMove(id,folderId,beforeId){const b=state.mqb.find(x=>x.id===id);if(!b)return;const changed=(b.folderId||null)!==(folderId||null);b.folderId=folderId||null;
+ const list=state.mqb.filter(x=>x!==b&&(x.folderId&&mqFolder(x.folderId)?x.folderId:null)===(folderId||null)).sort(mqByOrder);
+ let at=beforeId?list.findIndex(x=>x.id===beforeId):list.length;if(at<0)at=list.length;list.splice(at,0,b);
+ list.forEach((x,i)=>{if(x.order!==i||x===b){x.order=i;mqSaveQuiet(x);}});
+ if(folderId){ui.mqCol=ui.mqCol||{};ui.mqCol[folderId]=false;saveUI();}
+ render();if(changed)toast(folderId?`Moved to “${mqFolder(folderId).name}”`:"Moved out of the folder");}
+function mqStartDrag(e,row){const id=row.dataset.mqdrag;dragging=true;hideBubble();row.classList.add("drag-src");
+ const rc=row.getBoundingClientRect(),offX=e.clientX-rc.left,offY=e.clientY-rc.top;
+ const ghost=row.cloneNode(true);ghost.classList.remove("drag-src");ghost.classList.add("drag-ghost");ghost.style.width=rc.width+"px";document.body.appendChild(ghost);
+ const line=document.createElement("div");line.className="drop-line";line.hidden=true;document.body.appendChild(line);
+ let target=null,lastHot=null,openT=null;
+ const place=(x,y)=>{ghost.style.transform=`translate(${x-offX}px,${y-offY}px) rotate(-1deg)`;};
+ const hot=el=>{if(lastHot===el)return;if(lastHot)lastHot.classList.remove("drop-into");lastHot=el;if(el)el.classList.add("drop-into");clearTimeout(openT);
+  if(el&&el.classList.contains("mq-folder")&&el.classList.contains("closed")){openT=setTimeout(()=>{const t=el.querySelector("[data-act=mq-fold]");if(t){ui.mqCol=ui.mqCol||{};ui.mqCol[t.dataset.id]=false;saveUI();el.classList.remove("closed");}},650);}};
+ const find=(x,y)=>{const el=document.elementFromPoint(x,y);if(!el){line.hidden=true;hot(null);return null;}
+  const head=el.closest(".mq-fold");if(head){const fe=head.closest(".mq-folder"),t=fe.querySelector("[data-act=mq-fold]");line.hidden=true;hot(fe);return{folderId:t.dataset.id,beforeId:null};}
+  let cont=el.closest("[data-mqcont]");if(!cont){const fe=el.closest(".mq-folder"),un=el.closest(".mq-unf");cont=fe?fe.querySelector("[data-mqcont]"):un?un.querySelector("[data-mqcont]"):null;}
+  if(!cont){line.hidden=true;hot(null);return null;}const folderId=cont.dataset.mqcont||null;hot(folderId?cont.closest(".mq-folder"):cont.closest(".mq-unf"));
+  const rows=$$(":scope > .mq-row[data-mqdrag]",cont).filter(r=>r.dataset.mqdrag!==id);let before=null;for(const r of rows){const b=r.getBoundingClientRect();if(y<b.top+b.height/2){before=r;break;}}
+  const ref=before||rows[rows.length-1];
+  if(ref){const b=ref.getBoundingClientRect();line.hidden=false;line.style.left=b.left+"px";line.style.width=b.width+"px";line.style.top=(before?b.top-5:b.bottom+3)+"px";}
+  else{const b=cont.getBoundingClientRect();line.hidden=false;line.style.left=b.left+"px";line.style.width=Math.max(b.width,200)+"px";line.style.top=(b.top-2)+"px";}
+  return{folderId,beforeId:before?before.dataset.mqdrag:null};};
+ place(e.clientX,e.clientY);target=find(e.clientX,e.clientY);
+ const mv=ev=>{ev.preventDefault();place(ev.clientX,ev.clientY);autoscroll(ev.clientY);target=find(ev.clientX,ev.clientY);};
+ const up=()=>{document.removeEventListener("pointermove",mv);document.removeEventListener("pointercancel",up);clearTimeout(openT);ghost.remove();line.remove();if(lastHot)lastHot.classList.remove("drop-into");row.classList.remove("drag-src");dragging=false;mqDragSup=Date.now();
+  if(target)mqMove(id,target.folderId,target.beforeId);};
+ document.addEventListener("pointermove",mv,{passive:false});document.addEventListener("pointerup",up,{once:true});document.addEventListener("pointercancel",up,{once:true});}
+document.addEventListener("pointerdown",e=>{if(view.name!=="mq")return;const h=e.target.closest&&e.target.closest(".mq-handle");if(!h||(e.pointerType==="mouse"&&e.button!==0))return;
+ const row=h.closest(".mq-row");if(!row)return;e.preventDefault();const sx=e.clientX,sy=e.clientY;
+ const mv=ev=>{if(Math.hypot(ev.clientX-sx,ev.clientY-sy)>4){cl();mqStartDrag(ev,row);}};const cl=()=>{document.removeEventListener("pointermove",mv);document.removeEventListener("pointerup",cl);};
+ document.addEventListener("pointermove",mv);document.addEventListener("pointerup",cl);});
+Object.assign(MQA,{
+ "mq-sort-menu":el=>mqOpenSortMenu(el),
+ "mq-sort-apply":el=>{closeSortMenu();mqApplySort(el.dataset.scope||null,el.dataset.v);},
+ "mq-sort-undo":()=>{const u=mqSortUndo;if(!u)return;mqSortUndo=null;u.forEach(([id,o])=>{const b=state.mqb.find(x=>x.id===id);if(b&&b.order!==o){b.order=o;mqSaveQuiet(b);}});render();toast("Order restored");}
+});
 if(window.__FC_TEST){const T=window.__fcTest||(window.__fcTest={});Object.defineProperties(T,{mqSession:{get:()=>session},mqDraft:{get:()=>mqDraft}});T.mqImport=mqImport;T.saveMqBank=saveMqBank;T.mqRecord=mqRecord;T.mqSaveStats=mqSaveStats;T.queueWrite=queueWrite;T.mqExample=mqExample;T.mqPromptText=()=>mqPM&&mqPromptText();T.view=()=>view;}
 
 /* ================= import / export ================= */
@@ -6653,7 +6712,7 @@ document.addEventListener("input",e=>{
  if(t.matches("textarea[data-q]")&&session&&session.kind==="test"){session.ans[t.dataset.q]=t.value;updCount();}
 });
 document.addEventListener("submit",e=>{e.preventDefault();if(e.target.id==="su-name-form"){A["su-next"]();return;}if(e.target.id==="learn-form")learnSubmit($("#learn-input").value);if(e.target.id==="modal-form")A["modal-ok"]();if(e.target.id==="tag-form"){const i=$("#tag-in");const v=normTag(i.value);if(!v){i.focus();return;}tagModalUpdate(l=>addTag(l,v));closeModal();toast(`Tagged “${v}”`);}});
-document.addEventListener("mousedown",e=>{if(!$("#sort-menu"))return;if(e.target.closest&&(e.target.closest("#sort-menu")||e.target.closest("[data-act=sort-menu]")))return;closeSortMenu();},true);
+document.addEventListener("mousedown",e=>{if(!$("#sort-menu"))return;if(e.target.closest&&(e.target.closest("#sort-menu")||e.target.closest("[data-act=sort-menu],[data-act=mq-sort-menu]")))return;closeSortMenu();},true);
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#sort-menu")){closeSortMenu();return;}});
 document.addEventListener("keydown",e=>{
  if(e.key==="Escape"&&!$("#hl-bubble").hidden){hideBubble();try{getSelection().removeAllRanges();}catch(_){}return;}
