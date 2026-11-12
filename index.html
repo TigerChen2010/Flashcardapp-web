@@ -862,12 +862,33 @@ mark.hl .mx{background:transparent}
 .mq-q{display:flex;flex-direction:column;gap:4px;padding:14px 16px;border-radius:14px;background:var(--card);box-shadow:var(--shadow);text-align:left;border:0;color:var(--text);cursor:pointer;font:inherit;transition:transform .12s var(--ease)}
 .mq-q:hover:not(:disabled){transform:translateY(-1px)}.mq-q:disabled{opacity:.55;cursor:default}
 .mq-q b{display:flex;gap:8px;align-items:center;font-size:14.5px}.mq-q span{font-size:12.5px;color:var(--muted)}
-.mq-row .mq-handle{width:26px;margin-left:2px}
-.mq-row[data-mqdrag]{padding-left:0}
 .mq-unf{border-radius:var(--r-md);transition:background-color .15s,box-shadow .15s}
 .mq-unf.drop-into{background:var(--accent-soft);box-shadow:0 0 0 2px var(--accent)}
 .mq-folder.drop-into>.mq-fold{background:var(--accent-soft);border-radius:var(--r-md);box-shadow:0 0 0 2px var(--accent)}
 .mq-row.drag-ghost{display:flex}
+/* same geometry as Library rows: 4px edge, 32px handle, 8px gap */
+.mq-row[data-mqdrag]{gap:8px;padding:8px 10px 8px 4px}
+.mq-row[data-mqdrag] .mq-rm{padding:0}
+.mq-row .selc{margin-left:10px;flex:none}
+.mq-row.sel{box-shadow:0 0 0 2px var(--accent),var(--shadow)}
+.mq-row.selmode .mq-rm{cursor:pointer}
+.mq-fold>.mq-fhandle{width:22px;height:30px;margin-left:-6px;opacity:.55;transition:opacity .15s}
+.mq-fold:hover>.mq-fhandle{opacity:1}
+@media (hover:none){.mq-fold>.mq-fhandle{opacity:.8}}
+.mq-fbody>div{display:flex;flex-direction:column;gap:10px}
+.mq-folder.sub{margin-left:14px;padding-left:12px;border-left:1.5px solid var(--border)}
+.mq-fghost{background:var(--card);border-radius:var(--r-md);padding:4px 8px}
+.mq-top{margin-bottom:4px}
+.mq-qrow{display:flex;align-items:flex-start;border-top:1px solid var(--border)}
+.mq-list>.mq-qrow:first-child{border-top:0}
+.mq-qrow .mq-ql{border-top:0;flex:1;min-width:0}
+.mq-qrow .mq-star{margin-top:6px}
+.mq-star{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:var(--r-md);color:var(--text-faint);background:none;border:0;cursor:pointer}
+.mq-star:hover{background:var(--card-2);color:var(--text)}
+.mq-star.on{color:var(--accent)}
+.mq-lr .mq-star{width:28px;height:28px;margin:-6px -6px -6px 0}
+.mq-checks label>span{min-width:0}
+.mq-selbar .sel-acts{flex-wrap:wrap}
 .mq-folder{display:flex;flex-direction:column;gap:8px}
 .mq-fbody{display:grid;grid-template-rows:1fr;transition:grid-template-rows .3s var(--ease),opacity .22s ease}
 .mq-fbody>div{min-height:0;overflow:hidden;padding:2px 4px 6px;margin:-2px -4px -6px}
@@ -5844,30 +5865,6 @@ const MQV={mq:mqG(vMq),mqbank:mqG(vMqBank),mqedit:mqG(vMqEdit),mqrun:mqG(vMqRun)
 function mqSavedExam(){try{const x=JSON.parse(localStorage.getItem(MQ_EXAMK));return x&&x.items&&x.items.length?x:null;}catch(e){return null;}}
 function mqResumeHTML(bid){const x=mqSavedExam();if(!x||(bid&&x.bank!==bid))return"";const left=x.exam.limit-x.exam.used;const n=Object.values(x.ans||{}).filter(a=>a.sel&&a.sel.length).length;
  return`<div class="alert" role="status">${ic("clock",16)}<span>Unfinished timed exam: <b>${esc(x.title)}</b> · ${n}/${x.items.length} answered · ${mqClock(left)} left</span><button class="btn sm primary" data-act="mq-resume">Resume</button><button class="btn sm ghost" data-act="mq-discard">Discard</button></div>`;}
-function mqRow(b){const n=(b.qs||[]).length,wrong=(b.qs||[]).filter(q=>mqStillWrong(b.id,q.id)).length,tried=(b.qs||[]).filter(q=>mqQAcc(b.id,q.id)!=null).length;
- const sub=[plural(n,"question")];if(b.example)sub.push("example");else{if(wrong)sub.push(`${wrong} still wrong`);if(tried<n&&tried)sub.push(`${n-tried} not tried`);}
- return`<div class="mq-row" ${b.example?"":`data-mqdrag="${b.id}"`}>${b.example?"":`<span class="handle mq-handle" aria-label="Drag to move" title="Drag to reorder or drop into a folder"><span></span><span></span><span></span><span></span><span></span><span></span></span>`}<button class="mq-rm" data-act="mq-open" data-id="${b.id}"><b>${esc(b.title)}</b><span>${sub.join(" · ")}</span></button>${b.example?`<span class="chip">Example</span>`:mqPctChip(mqLastScore(b))}<button class="btn icon ghost sm" data-act="mq-menu" data-id="${b.id}" aria-label="More for ${esc(b.title)}">${ic("dots",18)}</button></div>`;}
-function vMq(){
- const banks=mqRealBanks(),all=mqBanks(),nq=banks.reduce((a,b)=>a+(b.qs||[]).length,0);
- const wrongN=mqPairs(all).filter(({b,q})=>mqStillWrong(b.id,q.id)).length;
- const weak=mqTopicAcc(mqPairs(all)).find(t=>t.acc!=null);
- const col=ui.mqCol||{};
- const folderHTML=f=>{const bs=banks.filter(b=>b.folderId===f.id).sort(mqByOrder);const closed=!!col[f.id];
-  return`<div class="mq-folder ${closed?"closed":""}"><div class="mq-fold"><button class="mq-fold-t" data-act="mq-fold" data-id="${f.id}" aria-expanded="${!closed}">${ic("chev",16)}<b>${esc(f.name)}</b><span class="dim">${plural(bs.length,"bank")}</span></button><button class="btn icon ghost sm" data-act="mq-sort-menu" data-scope="${f.id}" aria-label="Sort ${esc(f.name)}" title="Sort this folder">${ic("sort",16)}</button><button class="btn icon ghost sm" data-act="mq-fmenu" data-id="${f.id}" aria-label="More for folder ${esc(f.name)}">${ic("dots",18)}</button></div>
-  <div class="mq-fbody"><div><div class="rows" data-mqcont="${f.id}">${bs.map(mqRow).join("")||`<p class="dim" style="margin:4px 2px;font-size:13px">No banks in this folder yet.</p>`}</div></div></div></div>`;};
- const unf=banks.filter(b=>!b.folderId||!mqFolder(b.folderId)).sort(mqByOrder);
- return`<section class="sec"><span class="eyebrow">${plural(banks.length,"bank")} · ${plural(state.mqf.length,"folder")} · ${plural(nq,"question")}</span><h1 class="h1">MCQ Question bank</h1>
- <p class="mq-desc">Exam-style questions with marked answers. To quiz yourself on your own cards, use Learn or Test inside a set.</p>
- <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="mq-new">${ic("plus",16)}New bank</button><button class="btn" data-act="mq-import">${MQ_DL}Import .mcq</button><button class="btn" data-act="mq-newfolder">${ic("folderPlus",16)}New folder</button>${banks.length>1?`<button class="btn" data-act="mq-sort-menu" data-scope="" aria-haspopup="menu">${ic("sort",16)}Sort <span class="dim" style="font-size:10px">▾</span></button>`:""}</div></section>
- ${mqResumeHTML()}
- <div class="mq-quick"><button class="mq-q" data-act="mq-redo" ${wrongN?"":"disabled"}><b>${ic("reset",16)}Redo wrong ones</b><span>${wrongN?plural(wrongN,"question")+" still wrong":"Nothing to redo yet"}</span></button><button class="mq-q" data-act="mq-mixed" ${all.length?"":"disabled"}><b>${ic("shuffle",16)}Mixed practice</b><span>Pick banks, topics and how many</span></button><button class="mq-q" data-act="go" data-v="mqstats"><b>${MQ_CHART}Stats &amp; AI prompt</b><span>${weak?`Weakest: ${esc(weak.t)} · ${Math.round(weak.acc*100)}%`:"Accuracy by topic, history, most missed"}</span></button></div>
- <section class="sec" style="gap:10px">
- ${state.mqf.map(folderHTML).join("")}
- ${unf.length||state.mqf.length&&banks.length?`<div class="sec mq-unf" style="gap:8px">${state.mqf.length?`<span class="eyebrow" style="padding-top:4px">Unfiled</span>`:""}<div class="rows" data-mqcont="">${unf.map(mqRow).join("")}</div>${!unf.length?`<p class="drop-hint">Drop a bank here to take it out of its folder.</p>`:""}</div>`:""}
- ${!banks.length?`<div class="empty">No question banks yet. Import a .mcq file (Claude can make one from a past paper and its markscheme), or make a bank yourself.<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn primary" data-act="mq-import">${MQ_DL}Import .mcq</button><button class="btn" data-act="mq-new">${ic("plus",16)}New bank</button></div></div>`:""}
- ${ui.mqHideEx?"":`<div class="sec" style="gap:8px"><span class="eyebrow" style="padding-top:4px">Example</span><div class="rows">${mqRow(mqExample())}</div></div>`}
- </section>`;}
-
 function mqBars(tops){if(!tops.length)return`<p class="dim" style="margin:0;font-size:13px">Answer some questions to see your accuracy by topic.</p>`;
  return`<div class="mq-bars">${tops.map(t=>`<div class="mq-bar"><span title="${esc(t.t)}">${esc(t.t)}</span><i><u style="width:${t.acc==null?0:Math.max(2,t.acc*100)}%;background:${t.acc==null?"transparent":t.acc>=.8?"var(--good)":t.acc>=.5?"var(--accent)":"var(--warn)"}"></u></i><span class="mono">${t.acc==null?"—":Math.round(t.acc*100)+"%"}</span></div>`).join("")}</div>`;}
 function mqHistory(sess){sess=sess.slice(-14);if(!sess.length)return`<p class="dim" style="margin:0;font-size:13px">Your session scores will appear here.</p>`;
@@ -5881,21 +5878,21 @@ function mqMissed(pairs,limit=8){const l=pairs.map(({b,q})=>{const r=mqStats(b.i
 function mqSessAll(banks){const m=new Map();banks.forEach(b=>(mqStats(b.id).ss||[]).forEach(s=>{const o=m.get(s.sid||s.at)||{at:s.at,mode:s.mode,n:0,sc:0};o.n+=s.n;o.sc+=s.sc;m.set(s.sid||s.at,o);}));return[...m.values()].sort((a,b)=>a.at-b.at);}
 function vMqBank(){
  const b=mqBank(view.id);if(!b)return`<div class="empty">This bank no longer exists.<button class="btn" data-act="go" data-v="mq">Back to MCQ Question bank</button></div>`;
- const f=b.folderId&&mqFolder(b.folderId),qs=b.qs||[];
+ const fp=mqBFolder(b)?mqFPath(mqBFolder(b)):[],qs=b.qs||[],starN=mqStarN(b);
  const wrongN=qs.filter(q=>mqStillWrong(b.id,q.id)).length,flagN=qs.filter(q=>q.flagKey).length,aiN=qs.filter(q=>q.key==="ai").length,last=mqLastScore(b);
  const srcs=uniq(qs.map(q=>(q.src||"").replace(/\s*Q\d+.*$/i,"")).filter(Boolean)).slice(0,3);
  post=()=>{if(view.focusQ){const el=$("#mq-q-"+view.focusQ);if(el){el.scrollIntoView({block:"center"});el.classList.add("mq-flash");}view.focusQ=null;}};
- return`<section class="sec"><span class="eyebrow">${f?esc(f.name)+" · ":""}${plural(qs.length,"question")}</span><h1 class="h1">${esc(b.title)}</h1>
+ return`<section class="sec"><span class="eyebrow">${fp.length?esc(fp.join(" › "))+" · ":""}${plural(qs.length,"question")}</span><h1 class="h1">${esc(b.title)}</h1>
  ${b.desc?`<p class="mq-desc">${esc(b.desc)}</p>`:""}
- <div class="mq-tags">${last!=null?`<span class="chip ${last>=.8?"good":last>=.5?"":"warn"}">Last score ${Math.round(last*100)}%</span>`:""}${wrongN?`<span class="chip warn">${wrongN} still wrong</span>`:""}${flagN?`<span class="chip warn">${ic("flag",12)}${plural(flagN,"answer key")} to check</span>`:""}${aiN?`<span class="chip">${aiN} AI-worked key${aiN===1?"":"s"}</span>`:""}${srcs.map(s=>`<span class="chip">${esc(s)}</span>`).join("")}</div>
- <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" data-act="mq-practice" data-id="${b.id}" ${qs.length?"":"disabled"}>${MQ_PLAY}Practice</button><button class="btn" data-act="mq-exam-setup" data-id="${b.id}" ${qs.length?"":"disabled"}>${ic("clock",16)}Timed exam</button><button class="btn" data-act="mq-redo" data-id="${b.id}" ${wrongN?"":"disabled"}>${ic("reset",16)}Redo wrong (${wrongN})</button><button class="tog ${ui.mqShuffle?"on":""}" data-act="mq-shuffle">${ic("shuffle",15)}Shuffle</button>
+ <div class="mq-tags">${last!=null?`<span class="chip ${last>=.8?"good":last>=.5?"":"warn"}">Last score ${Math.round(last*100)}%</span>`:""}${wrongN?`<span class="chip warn">${wrongN} still wrong</span>`:""}${flagN?`<span class="chip warn">${ic("flag",12)}${plural(flagN,"answer key")} to check</span>`:""}${aiN?`<span class="chip">${aiN} AI-worked key${aiN===1?"":"s"}</span>`:""}${starN?`<span class="chip acc">${ic("starF",12)}${starN} starred</span>`:""}${srcs.map(s=>`<span class="chip">${esc(s)}</span>`).join("")}</div>
+ <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button class="btn primary" data-act="mq-practice" data-id="${b.id}" ${qs.length?"":"disabled"}>${MQ_PLAY}Practice</button><button class="btn" data-act="mq-exam-setup" data-id="${b.id}" ${qs.length?"":"disabled"}>${ic("clock",16)}Timed exam</button><button class="btn" data-act="mq-redo" data-id="${b.id}" ${wrongN?"":"disabled"}>${ic("reset",16)}Redo wrong (${wrongN})</button><button class="tog ${ui.mqShuffle?"on":""}" data-act="mq-shuffle">${ic("shuffle",15)}Shuffle</button>${starN?`<button class="tog ${ui.mqStarOnly?"on":""}" data-act="mq-staronly">${ic("star",15)}Starred only</button>`:""}
  ${b.example?`<button class="btn ghost" data-act="mq-hide-ex">Hide example</button>`:`<button class="btn ghost" data-act="mq-edit" data-id="${b.id}">${ic("edit",16)}Edit</button><button class="btn ghost" data-act="mq-export" data-id="${b.id}">Export .mcq</button><button class="btn icon ghost" data-act="mq-menu" data-id="${b.id}" aria-label="More">${ic("dots",18)}</button>`}</div></section>
  ${mqResumeHTML(b.id)}
  <section class="panel"><h2 class="h2">Accuracy by topic</h2>${mqBars(mqTopicAcc(mqPairs([b])))}
  <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sm" data-act="mq-ai" data-id="${b.id}">${MQ_COPY}Copy AI prompt</button></div></section>
  <section class="panel"><h2 class="h2">History</h2>${mqHistory(mqStats(b.id).ss||[])}</section>
  <section class="panel"><h2 class="h2">Most missed</h2><div class="mq-list">${mqMissed(mqPairs([b]))}</div></section>
- <section class="panel"><h2 class="h2">Questions</h2><div class="mq-list">${qs.map((q,i)=>{const acc=mqQAcc(b.id,q.id);return`<button class="mq-ql" id="mq-q-${q.id}" data-act="mq-practice" data-id="${b.id}" data-from="${i}"><span class="mq-dot ${acc==null?"":mqStillWrong(b.id,q.id)?"bad":"good"}"></span><span class="n">${i+1}</span><span class="x"><span class="mq-snip">${esc(mqPlain(q.q)||"(picture question)")}${mqN(q)>1?` <b class="dim">· Select ${mqN(q)}</b>`:""}</span><span class="mq-tags">${q.topic?`<span class="chip">${esc(q.topic)}</span>`:""}${q.diff?`<span class="chip">${esc(cap(q.diff))}</span>`:""}${q.src?`<span class="chip">${esc(q.src)}</span>`:""}${q.key==="ai"?`<span class="chip">Key: AI-worked</span>`:""}${q.flagKey?`<span class="chip warn">${ic("flag",11)}Key to check</span>`:""}${(q.tags||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join("")}</span></span></button>`;}).join("")||`<p class="dim" style="margin:0">No questions yet.</p>`}</div></section>`;}
+ <section class="panel"><h2 class="h2">Questions</h2><div class="mq-list">${qs.map((q,i)=>{const acc=mqQAcc(b.id,q.id);return`<div class="mq-qrow" id="mq-q-${q.id}"><button class="mq-ql" data-act="mq-practice" data-id="${b.id}" data-from="${i}"><span class="mq-dot ${acc==null?"":mqStillWrong(b.id,q.id)?"bad":"good"}"></span><span class="n">${i+1}</span><span class="x"><span class="mq-snip">${esc(mqPlain(q.q)||"(picture question)")}${mqN(q)>1?` <b class="dim">· Select ${mqN(q)}</b>`:""}</span><span class="mq-tags">${q.topic?`<span class="chip">${esc(q.topic)}</span>`:""}${q.diff?`<span class="chip">${esc(cap(q.diff))}</span>`:""}${q.src?`<span class="chip">${esc(q.src)}</span>`:""}${q.key==="ai"?`<span class="chip">Key: AI-worked</span>`:""}${q.flagKey?`<span class="chip warn">${ic("flag",11)}Key to check</span>`:""}${(q.tags||[]).map(t=>`<span class="chip">${esc(t)}</span>`).join("")}</span></span></button>${mqStarBtn(b,q)}</div>`;}).join("")||`<p class="dim" style="margin:0">No questions yet.</p>`}</div></section>`;}
 const cap=s=>String(s||"").charAt(0).toUpperCase()+String(s||"").slice(1);
 function vMqStats(){const all=mqBanks(),pairs=mqPairs(all);
  return`<section class="sec"><button class="linkbtn" data-act="go" data-v="mq" style="align-self:flex-start">${ic("back",16)}MCQ Question bank</button><span class="eyebrow">All banks</span><h1 class="h1">Stats &amp; AI prompt</h1></section>
@@ -5938,12 +5935,12 @@ function vMqRun(){const S=session;if(!S||S.kind!=="mq")return`<div class="empty"
  else foot=`<div class="mq-foot"><span class="dim" style="font-size:12.5px">${N>1?`Pick ${N}.`:""}</span><button class="btn primary mq-next" data-act="mq-check" ${a.sel.length?"":"disabled"}>Check</button></div>`;
  const grid=exam?`<section class="panel"><div class="sec-head"><h3 class="h3">Questions</h3><span class="dim" style="font-size:12.5px">${answered} answered · ${plural(S.exam.flags.length,"flag")}</span></div><div class="mq-grid">${S.items.map((_,k)=>{const x=S.ans[k];return`<button class="${x&&x.sel&&x.sel.length?"a":""} ${k===S.i?"c":""} ${S.exam.flags.includes(k)?"f":""}" data-act="mq-goto" data-i="${k}" aria-label="Question ${k+1}">${k+1}</button>`;}).join("")}</div><button class="btn" data-act="mq-finish" style="align-self:flex-end">Finish exam</button></section>`:"";
  post=()=>{mqApplyHl();};
- return head+bar+`<div class="qcard mq-card"><div class="qlabel"><span>${exam?`Question ${S.i+1} of ${S.items.length}`:lab||"&nbsp;"}</span><span class="mq-lr">${N>1?`<span class="mq-sel">Select ${N}</span>`:""}${q.src?`<span>${esc(q.src)}</span>`:""}${q.key==="ai"?`<span class="mq-ai" title="No official markscheme: the answer was worked out by AI">Key: AI-worked</span>`:""}</span></div>
+ return head+bar+`<div class="qcard mq-card"><div class="qlabel"><span>${exam?`Question ${S.i+1} of ${S.items.length}`:lab||"&nbsp;"}</span><span class="mq-lr">${N>1?`<span class="mq-sel">Select ${N}</span>`:""}${q.src?`<span>${esc(q.src)}</span>`:""}${q.key==="ai"?`<span class="mq-ai" title="No official markscheme: the answer was worked out by AI">Key: AI-worked</span>`:""}${mqStarBtn(b,q)}</span></div>
   ${q.q?`<div class="qprompt mq-qtext" data-hlk="q">${mqText(q.q)}</div>`:""}
   ${q.img?`<div class="mq-fig"><img src="${esc(mqSrc(q.img))}" alt="Diagram" data-act="img-zoom"></div>`:""}
   <div class="opts ${optImg?"mq-optimg":""}">${opts}</div>${foot}</div>
   ${grid}
-  <div class="hints mq-hints"><span><kbd>A</kbd>–<kbd>${mqLetter(it.o.length-1)}</kbd> pick</span>${exam?`<span><kbd>←</kbd><kbd>→</kbd> move</span><span><kbd>F</kbd> flag</span>`:`<span><kbd>Enter</kbd> check / next</span>`}<span>Right-click an option to cross it out</span><span>Select words in the question to highlight them</span><span><kbd>Esc</kbd> leave</span></div>`;}
+  <div class="hints mq-hints"><span><kbd>A</kbd>–<kbd>${mqLetter(it.o.length-1)}</kbd> pick</span>${exam?`<span><kbd>←</kbd><kbd>→</kbd> move</span><span><kbd>F</kbd> flag</span>`:`<span><kbd>Enter</kbd> check / next</span>`}<span><kbd>S</kbd> star</span><span>Right-click an option to cross it out</span><span>Select words in the question to highlight them</span><span><kbd>Esc</kbd> leave</span></div>`;}
 function mqPick(oid){const S=session;if(!S||S.done)return;const {q}=mqItem(S,S.i);if(!q)return;const a=S.ans[S.i]||(S.ans[S.i]={sel:[]});if(a.checked)return;
  const N=mqN(q);const i=a.sel.indexOf(oid);if(i>=0)a.sel.splice(i,1);else{if(N===1)a.sel=[oid];else{a.sel.push(oid);if(a.sel.length>N)a.sel.shift();}}
  const xs=S.xs[S.i];if(xs&&xs.includes(oid)&&a.sel.includes(oid))xs.splice(xs.indexOf(oid),1);
@@ -6023,6 +6020,7 @@ document.addEventListener("keydown",e=>{if(view.name!=="mqrun"||modal)return;con
  if(S.done)return;
  if(S.mode==="exam"&&S.exam.paused){if(k===" "||k==="Enter"){e.preventDefault();MQA["mq-pause"]();}return;}
  const {it}=mqItem(S,S.i);const a=S.ans[S.i];
+ if(k==="s"||k==="S"){const x=mqItem(S,S.i);if(x.q){e.preventDefault();mqToggleStar(x.b.id,x.q.id);render();}return;}
  let idx=-1;if(/^[a-f]$/i.test(k))idx=k.toLowerCase().charCodeAt(0)-97;else if(/^[1-6]$/.test(k))idx=+k-1;
  if(idx>=0&&it&&idx<it.o.length){e.preventDefault();mqPick(it.o[idx]);return;}
  if(S.mode==="exam"){if(k==="ArrowRight"||k==="Enter"){e.preventDefault();if(S.i<S.items.length-1)mqNext();else if(k==="Enter")mqFinishAsk();}else if(k==="ArrowLeft"){e.preventDefault();MQA["mq-back"]();}else if(k==="f"||k==="F")MQA["mq-flag"]();return;}
@@ -6079,7 +6077,7 @@ async function mqUp(data){if(!data||typeof data!=="string"||!/^data:image\//.tes
  return data.length<200000?data:null;}
 async function mqImport(p,name){
  if(!p||p.format!=="mcq"||!Array.isArray(p.banks)){toast("That file isn't a .mcq question bank");return;}
- let folderId=null;if(p.folder){const nm=String(p.folder).trim().slice(0,80);let f=state.mqf.find(x=>x.name===nm);if(!f){f={id:uid(),name:nm,order:state.mqf.length,created:Date.now()};state.mqf.push(f);saveMqFolder(f);}folderId=f.id;}
+ let folderId=null;if(p.folder)folderId=mqEnsureFolderPath(p.folder);
  toast("Importing questions…");
  const made=[],problems=[];let lost=0,nq=0;
  for(const pb of p.banks){const qs=[];const title=String(pb.title||name.replace(/\.[^.]+$/,"")||"Imported bank").slice(0,120);
@@ -6092,7 +6090,7 @@ async function mqImport(p,name){
    const o2=[];for(const [k,o] of opts.entries()){const ob=typeof o==="string"?{t:o}:o||{};const img=ob.img?await mqUp(ob.img):null;if(ob.img&&!img)lost++;o2.push({id:"o"+k+uid().slice(0,3),t:String(ob.t||ob.text||""),img:img||null});}
    if(o2.some(o=>!o.t&&!o.img)){problems.push(`${where}: an option is empty`);continue;}
    const img=x.img?await mqUp(x.img):null;if(x.img&&!img)lost++;
-   qs.push({id:uid(),q:String(x.q||""),img,opts:o2,ans:ans.map(k=>o2[k].id),ex:String(x.ex||x.explain||""),topic:String(x.topic||"").slice(0,60),diff:/^(easy|medium|hard)$/i.test(x.diff||"")?x.diff.toLowerCase():"",src:String(x.src||x.source||"").slice(0,60),tags:Array.isArray(x.tags)?x.tags.map(normTag).filter(Boolean):[],keep:!!x.keep,key:x.key==="ai"?"ai":"official"});nq++;}
+   qs.push({id:uid(),q:String(x.q||""),img,opts:o2,ans:ans.map(k=>o2[k].id),ex:String(x.ex||x.explain||""),topic:String(x.topic||"").slice(0,60),diff:/^(easy|medium|hard)$/i.test(x.diff||"")?x.diff.toLowerCase():"",src:String(x.src||x.source||"").slice(0,60),tags:Array.isArray(x.tags)?x.tags.map(normTag).filter(Boolean):[],keep:!!x.keep,key:x.key==="ai"?"ai":"official",...(x.starred?{starred:true}:{})});nq++;}
   if(!qs.length)continue;
   const b={id:uid(),title,desc:String(pb.desc||""),folderId,order:-Date.now(),created:Date.now(),updated:Date.now(),qs};state.mqb.push(b);saveMqBank(b);made.push(b);}
  render();
@@ -6100,18 +6098,6 @@ async function mqImport(p,name){
  if(problems.length){openModal(`<h2 class="h2">${esc(msg)}</h2><p class="dim" style="margin:0">${plural(problems.length,"question")} ${problems.length===1?"was":"were"} skipped:</p><ul class="mq-probs">${problems.slice(0,12).map(x=>`<li>${esc(x)}</li>`).join("")}${problems.length>12?`<li>…and ${problems.length-12} more</li>`:""}</ul><div class="dialog-actions"><button class="btn primary" data-act="modal-no">OK</button></div>`);}
  else toast(msg);
  if(made.length===1)go({name:"mqbank",id:made[0].id});else if(made.length)go({name:"mq"});}
-async function mqExport(id){const b=mqBank(id);if(!b||b.example)return;
- const doit=async()=>{toast("Preparing export…");const f=b.folderId&&mqFolder(b.folderId);
-  const d=async x=>{if(!x)return undefined;if(/^data:/.test(x))return x;try{const r=await fetch(mqSrc(x));if(r.ok)return await blobToDataURL(await r.blob());}catch(e){}return undefined;};
-  const out={format:"mcq",version:1,exported:Date.now(),folder:f?f.name:null,banks:[{title:b.title,desc:b.desc||"",questions:[]}]};
-  for(const q of b.qs||[]){const o={q:q.q,opts:[],ans:q.ans.map(id=>q.opts.findIndex(o=>o.id===id)).filter(k=>k>=0)};const qi=await d(q.img);if(qi)o.img=qi;
-   for(const op of q.opts){const x={t:op.t};const oi=await d(op.img);if(oi)x.img=oi;o.opts.push(x);}
-   ["ex","topic","src"].forEach(k=>{if(q[k])o[k]=q[k];});if(q.diff)o.diff=q.diff;if(q.tags&&q.tags.length)o.tags=q.tags;if(q.keep)o.keep=true;if(q.key==="ai")o.key="ai";out.banks[0].questions.push(o);}
-  const name=b.title.replace(/[\\/:*?"<>|]+/g,"-").slice(0,80)+".mcq",text=JSON.stringify(out);
-  if(DESK){const ok=await DESK.saveFile(name,text);if(ok)toast("Exported "+name);}
-  else{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type:"application/json"}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast("Exported "+name);}};
- if((b.qs||[]).some(q=>q.src))confirmBox("Share past-paper questions carefully","Some questions have a past-paper source. IB papers are copyrighted: using them for your own practice is fine, but don't share them publicly.","Export",doit);else doit();}
-
 /* ---------- editor ---------- */
 let mqDraft=null;
 const mqBlankQ=()=>({id:uid(),q:"",img:null,opts:[0,1,2,3].map(k=>({id:"o"+k+uid().slice(0,3),t:"",img:null})),ans:[],ex:"",topic:"",diff:"",src:"",tags:[],keep:false,key:"official"});
@@ -6191,25 +6177,28 @@ function mqSetupStep(i,steps,last,nav){const on=!!state.settings.mq;
 /* ---------- modals: exam setup, mixed practice ---------- */
 let mqMod=null;
 function mqModalSync(){const M=mqMod;if(!M)return;if(M.kind==="exam"){const n=$("#mqx-n"),mi=$("#mqx-min");if(n)M.n=clamp(parseInt(n.value,10)||1,1,M.max);if(mi)M.min=clamp(parseInt(mi.value,10)||1,1,600);}
- if(M.kind==="mix"){M.banks=$$('#modal [data-mqmix="b"]').filter(x=>x.checked).map(x=>x.value);M.topics=$$('#modal [data-mqmix="t"]').filter(x=>x.checked).map(x=>x.value);const d=$('#modal [data-mqmix="d"]');if(d)M.diff=d.value;const n=$('#modal [data-mqmix="n"]');if(n)M.n=clamp(parseInt(n.value,10)||10,1,200);}
+ if(M.kind==="mix"){M.banks=$$('#modal [data-mqmix="b"]').filter(x=>x.checked).map(x=>x.value);M.topics=$$('#modal [data-mqmix="t"]').filter(x=>x.checked).map(x=>x.value);const d=$('#modal [data-mqmix="d"]');if(d)M.diff=d.value;const st=$('#modal [data-mqmix="s"]');M.starred=!!(st&&st.checked);const n=$('#modal [data-mqmix="n"]');if(n)M.n=clamp(parseInt(n.value,10)||10,1,200);}
  mqModRender();}
 function mqModRender(){const M=mqMod,d=$("#modal .dialog");if(!M||!d)return;
  if(M.kind==="exam"){const mins=M.preset?Math.round(M.n*1.5*10)/10:M.min;
+  const anyStar=mqPairs(M.banks.map(mqBank).filter(Boolean)).some(({b,q})=>mqIsStar(b,q));
   d.innerHTML=`<h2 class="h2">Timed exam</h2><p class="dim" style="margin:0">${esc(M.title)} · ${plural(M.max,"question")}</p>
+  ${anyStar?`<label class="mq-switch"><input type="checkbox" data-act="mq-x-star" ${M.starred?"checked":""}>Starred questions only</label>`:""}
   <div class="seg" role="group"><button class="${M.preset?"on":""}" data-act="mq-x-preset" data-v="1">Physics Paper 1A pace</button><button class="${M.preset?"":"on"}" data-act="mq-x-preset" data-v="0">Custom</button></div>
   <label class="fgroup"><span class="eyebrow">Questions</span><input class="inp" id="mqx-n" type="number" min="1" max="${M.max}" value="${M.n}"></label>
   ${M.preset?`<p class="dim" style="margin:0;font-size:13px">About 1.5 minutes per question: <b>${mins} minutes</b>.</p>`:`<label class="fgroup"><span class="eyebrow">Minutes</span><input class="inp" id="mqx-min" type="number" min="1" max="600" value="${M.min}"></label>`}
   <p class="dim" style="margin:0;font-size:12.5px">Questions in random order. No answers shown until you finish. You can pause, and leaving keeps your place.</p>
-  <div class="dialog-actions"><button class="btn ghost" data-act="modal-no">Cancel</button><button class="btn primary" data-act="mq-x-start">Start</button></div>`;return;}
+  <div class="dialog-actions"><button class="btn ghost" data-act="modal-no">Cancel</button><button class="btn primary" data-act="mq-x-start" ${M.max?"":"disabled"}>Start</button></div>`;return;}
  if(M.kind==="mix"){const banks=mqBanks();const chosen=banks.filter(b=>M.banks.includes(b.id));const topics=uniq(mqPairs(chosen).map(({q})=>q.topic||"No topic")).sort();M.topics=M.topics.filter(t=>topics.includes(t));
   const pool=mqMixPool();
   d.innerHTML=`<h2 class="h2">Mixed practice</h2>
-  <span class="eyebrow">Banks</span><div class="mq-checks">${banks.map(b=>`<label><input type="checkbox" data-mqmix="b" value="${b.id}" ${M.banks.includes(b.id)?"checked":""}>${esc(b.title)} <span class="dim">${(b.qs||[]).length}</span></label>`).join("")}</div>
+  <span class="eyebrow">Banks</span><div class="mq-checks">${banks.map(b=>{const p=mqBFolder(b)?mqFPath(mqBFolder(b)).join(" › ")+" › ":"";return`<label><input type="checkbox" data-mqmix="b" value="${b.id}" ${M.banks.includes(b.id)?"checked":""}><span>${p?`<span class="dim">${esc(p)}</span>`:""}${esc(b.title)} <span class="dim">${(b.qs||[]).length}</span></span></label>`;}).join("")}</div>
   ${topics.length>1?`<span class="eyebrow">Topics (none ticked = all)</span><div class="mq-checks">${topics.map(t=>`<label><input type="checkbox" data-mqmix="t" value="${esc(t)}" ${M.topics.includes(t)?"checked":""}>${esc(t)}</label>`).join("")}</div>`:""}
+  ${mqPairs(chosen).some(({b,q})=>mqIsStar(b,q))?`<label class="mq-switch"><input type="checkbox" data-mqmix="s" ${M.starred?"checked":""}>Starred questions only</label>`:""}
   <div class="mq-emeta"><label class="fgroup"><span class="eyebrow">Difficulty</span><select class="inp" data-mqmix="d"><option value="">Any</option>${["easy","medium","hard"].map(x=>`<option value="${x}" ${M.diff===x?"selected":""}>${cap(x)}</option>`).join("")}</select></label><label class="fgroup"><span class="eyebrow">How many</span><input class="inp" type="number" min="1" max="200" data-mqmix="n" value="${M.n}"></label></div>
   <p class="dim" style="margin:0;font-size:13px">${plural(pool.length,"question")} match${pool.length===1?"es":""}.</p>
   <div class="dialog-actions"><button class="btn ghost" data-act="modal-no">Cancel</button><button class="btn primary" data-act="mq-mix-start" ${pool.length?"":"disabled"}>Start ${Math.min(M.n,pool.length)||""}</button></div>`;}}
-function mqMixPool(){const M=mqMod;const banks=mqBanks().filter(b=>M.banks.includes(b.id));return mqPairs(banks).filter(({q})=>(!M.topics.length||M.topics.includes(q.topic||"No topic"))&&(!M.diff||q.diff===M.diff));}
+function mqMixPool(){const M=mqMod;const banks=mqBanks().filter(b=>M.banks.includes(b.id));return mqPairs(banks).filter(({b,q})=>(!M.topics.length||M.topics.includes(q.topic||"No topic"))&&(!M.diff||q.diff===M.diff)&&(!M.starred||mqIsStar(b,q)));}
 
 /* ---------- actions ---------- */
 const MQ_PLAY=`<svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10-6.5a1 1 0 0 0 0-1.7l-10-6.5A1 1 0 0 0 8 5.5z"/></svg>`;
@@ -6253,7 +6242,7 @@ const MQA={
  "mq-x-preset":el=>{mqModalSync();mqMod.preset=el.dataset.v==="1";mqModRender();},
  "mq-x-start":()=>{mqModalSync();const M=mqMod,b=mqBank(M.bank);if(!b)return;const mins=M.preset?M.n*1.5:M.min;closeModal();const old=mqSavedExam();if(old)mqClearExam();
   ui.mqLast=b.id;saveUI();mqStart("exam",shuffle(mqPairs([b])).slice(0,M.n),{title:b.title,bank:b.id,limit:Math.round(mins*60000),back:{name:"mqbank",id:b.id}});},
- "mq-mixed":()=>{const banks=mqBanks();mqMod={kind:"mix",banks:banks.filter(b=>!b.example||banks.length===1).map(b=>b.id),topics:[],diff:"",n:10};openModal("",null);mqModRender();},
+ "mq-mixed":()=>{const banks=mqBanks();mqMod={kind:"mix",banks:banks.filter(b=>!b.example||banks.length===1).map(b=>b.id),topics:[],diff:"",n:10,starred:false};openModal("",null);mqModRender();},
  "mq-mix-start":()=>{mqModalSync();const pool=mqMixPool();if(!pool.length)return;closeModal();mqStart("mixed",shuffle(pool).slice(0,mqMod.n),{title:"Mixed",back:{name:"mq"}});},
  "mq-pick":el=>mqPick(el.dataset.o),
  "mq-check":()=>mqCheck(),
@@ -6293,53 +6282,206 @@ const MQA={
 const mqByOrder=(a,b)=>(a.order??0)-(b.order??0)||(a.created||0)-(b.created||0);
 function mqSaveQuiet(b){const u=b.updated;saveMqBank(b);b.updated=u;persistLocal();}
 let mqSortUndo=null,mqDragSup=0;
-function mqSortCmp(mode){const op=ui.mqOpened||{};return(a,b)=>{if(mode==="az")return natCmp(a.title,b.title);if(mode==="za")return natCmp(b.title,a.title);
- const va=mode==="opened"?(op[a.id]||0):(a.updated||0),vb=mode==="opened"?(op[b.id]||0):(b.updated||0);return(vb-va)||natCmp(a.title,b.title);};}
-function mqApplySort(scope,mode){const snap=state.mqb.map(b=>[b.id,b.order]);const groups=scope?[scope]:[null,...state.mqf.map(f=>f.id)];
- groups.forEach(fid=>{state.mqb.filter(b=>(b.folderId&&mqFolder(b.folderId)?b.folderId:null)===fid).sort(mqSortCmp(mode)).forEach((b,i)=>{if(b.order!==i){b.order=i;mqSaveQuiet(b);}});});
+Object.assign(MQA,{
+ "mq-sort-menu":el=>mqOpenSortMenu(el),
+ "mq-sort-apply":el=>{closeSortMenu();mqApplySort(el.dataset.scope||null,el.dataset.v);},
+ "mq-sort-undo":()=>{const u=mqSortUndo;if(!u)return;mqSortUndo=null;u.forEach(([id,o])=>{const b=state.mqb.find(x=>x.id===id);if(b&&b.order!==o){b.order=o;mqSaveQuiet(b);}});render();toast("Order restored");}
+});
+
+/* ---------- MCQ list: nested folders, select mode, sort, drag (banks and folders) ---------- */
+const MQ_HANDLE=`<span class="handle mq-handle" aria-label="Drag to move" title="Drag to reorder or drop into a folder"><span></span><span></span><span></span><span></span><span></span><span></span></span>`;
+const MQ_FHANDLE=`<span class="handle mq-fhandle" aria-label="Drag folder" title="Drag onto another folder"><span></span><span></span><span></span><span></span><span></span><span></span></span>`;
+const mqFParent=f=>f&&f.parentId&&mqFolder(f.parentId)&&f.parentId!==f.id?f.parentId:null;
+const mqBFolder=b=>b&&b.folderId&&mqFolder(b.folderId)?b.folderId:null;
+const mqFKids=pid=>state.mqf.filter(f=>mqFParent(f)===(pid||null)).sort(mqByOrder);
+function mqFDesc(id,g=0){const out=[id];if(g>20)return out;mqFKids(id).forEach(k=>out.push(...mqFDesc(k.id,g+1)));return out;}
+function mqFAnc(id){const out=[];let f=mqFolder(id),g=0;while(f&&g++<20){out.unshift(f.id);f=mqFolder(mqFParent(f));}return out;}
+const mqFPath=id=>mqFAnc(id).map(x=>mqFolder(x).name);
+function mqBanksDeep(fid){const ids=new Set(mqFDesc(fid));return state.mqb.filter(b=>ids.has(mqBFolder(b)));}
+function mqEnsureFolderPath(path){let pid=null;String(path||"").split("/").map(x=>x.trim().slice(0,80)).filter(Boolean).forEach(nm=>{let f=state.mqf.find(x=>x.name===nm&&mqFParent(x)===pid);
+ if(!f){f={id:uid(),name:nm,parentId:pid,order:mqFKids(pid).length,created:Date.now()};state.mqf.push(f);saveMqFolder(f);}pid=f.id;});return pid;}
+/* stars: on the question (synced); the example bank keeps them on this device */
+const mqIsStar=(b,q)=>b&&b.example?(ui.mqExStar||[]).includes(q.id):!!q.starred;
+const mqStarN=b=>(b.qs||[]).filter(q=>mqIsStar(b,q)).length;
+function mqToggleStar(bid,qid){const b=mqBank(bid);if(!b)return false;
+ if(b.example){const a=ui.mqExStar=ui.mqExStar||[];const i=a.indexOf(qid);if(i>=0)a.splice(i,1);else a.push(qid);saveUI();return a.includes(qid);}
+ const rb=state.mqb.find(x=>x.id===bid),q=rb&&rb.qs.find(x=>x.id===qid);if(!q)return false;q.starred=!q.starred;if(!q.starred)delete q.starred;mqSaveQuiet(rb);return!!q.starred;}
+const mqStarBtn=(b,q)=>{const on=mqIsStar(b,q);return`<button class="star mq-star ${on?"on":""}" data-act="mq-star" data-b="${b.id}" data-q="${q.id}" aria-label="${on?"Unstar":"Star"} this question" aria-pressed="${on}">${ic(on?"starF":"star",17)}</button>`;};
+/* select mode */
+const mqSel=new Set();
+function mqSelOrdered(){const seen=$$(".mq-row[data-mqdrag]").map(r=>r.dataset.mqdrag).filter(id=>mqSel.has(id));const rest=state.mqb.filter(b=>mqSel.has(b.id)&&!seen.includes(b.id)).map(b=>b.id);return seen.concat(rest).filter(id=>state.mqb.some(b=>b.id===id));}
+function mqSelBar(){const n=mqSel.size;return`<div class="sel-bar mq-selbar" id="mq-sel-bar" role="toolbar" aria-label="Selected banks"><b class="mono" id="mq-sel-n">${n} selected</b>
+ <button class="btn sm ghost" data-act="mq-sel-all">Select all</button>
+ <span class="sel-acts"><button class="btn sm" data-act="mq-sel-practise" ${n?"":"disabled"}>${MQ_PLAY}Practise</button><button class="btn sm" data-act="mq-sel-exam" ${n?"":"disabled"}>${ic("clock",15)}Timed exam</button><button class="btn sm" data-act="mq-sel-move" ${n?"":"disabled"}>${ic("move",15)}Move to…</button><button class="btn sm" data-act="mq-sel-export" ${n?"":"disabled"}>${ic("up",15)}Export</button><button class="btn sm" data-act="mq-sel-reset" ${n?"":"disabled"}>${ic("reset",15)}Reset history</button><button class="btn sm danger" data-act="mq-sel-del" ${n?"":"disabled"}>${ic("trash",15)}Delete</button></span>
+ <button class="btn sm primary" data-act="mq-sel-done">Done</button></div>`;}
+function mqUpdSel(){$$(".mq-row[data-mqdrag]").forEach(r=>{const on=mqSel.has(r.dataset.mqdrag);r.classList.toggle("sel",on);const c=r.querySelector(".selc");if(c)c.classList.toggle("on",on);const bt=r.querySelector(".mq-rm");if(bt)bt.setAttribute("aria-checked",String(on));});const b=$("#mq-sel-bar");if(b)b.outerHTML=mqSelBar();}
+function mqRow(b){const sm=!!view.mqSel&&!b.example,on=sm&&mqSel.has(b.id);
+ const n=(b.qs||[]).length,wrong=(b.qs||[]).filter(q=>mqStillWrong(b.id,q.id)).length,tried=(b.qs||[]).filter(q=>mqQAcc(b.id,q.id)!=null).length,stars=mqStarN(b);
+ const sub=[plural(n,"question")];if(b.example)sub.push("example");else{if(wrong)sub.push(`${wrong} still wrong`);if(tried<n&&tried)sub.push(`${n-tried} not tried`);}if(stars)sub.push(`${stars} starred`);
+ return`<div class="mq-row ${on?"sel":""} ${sm?"selmode":""}" ${b.example?"":`data-mqdrag="${b.id}"`}>${sm?`<span class="selc ${on?"on":""}" aria-hidden="true">${ic("check",13)}</span>`:""}${b.example?"":MQ_HANDLE}<button class="mq-rm" data-act="${sm?"mq-sel-toggle":"mq-open"}" data-id="${b.id}" ${sm?`role="checkbox" aria-checked="${on}"`:""}><b>${esc(b.title)}</b><span>${sub.join(" · ")}</span></button>${b.example?`<span class="chip">Example</span>`:mqPctChip(mqLastScore(b))}<button class="btn icon ghost sm" data-act="mq-menu" data-id="${b.id}" aria-label="More for ${esc(b.title)}">${ic("dots",18)}</button></div>`;}
+function vMq(){
+ if(!view.mqSel)mqSel.clear();
+ const banks=mqRealBanks(),all=mqBanks(),nq=banks.reduce((a,b)=>a+(b.qs||[]).length,0);
+ const wrongN=mqPairs(all).filter(({b,q})=>mqStillWrong(b.id,q.id)).length;
+ const weak=mqTopicAcc(mqPairs(all)).find(t=>t.acc!=null);
+ const col=ui.mqCol||{},sm=!!view.mqSel;
+ const folderHTML=(f,depth)=>{const bs=banks.filter(b=>mqBFolder(b)===f.id).sort(mqByOrder);const kids=mqFKids(f.id);const deep=mqBanksDeep(f.id).length;const closed=!!col[f.id];
+  return`<div class="mq-folder ${closed?"closed":""} ${depth?"sub":""}" data-mqf="${f.id}"><div class="mq-fold">${MQ_FHANDLE}<button class="mq-fold-t" data-act="mq-fold" data-id="${f.id}" aria-expanded="${!closed}">${ic("chev",16)}<b>${esc(f.name)}</b><span class="dim">${plural(deep,"bank")}${kids.length?` · ${plural(kids.length,"folder")}`:""}</span></button><button class="btn icon ghost sm" data-act="mq-sort-menu" data-scope="${f.id}" aria-label="Sort ${esc(f.name)}" title="Sort this folder">${ic("sort",16)}</button><button class="btn icon ghost sm" data-act="mq-fmenu" data-id="${f.id}" aria-label="More for folder ${esc(f.name)}">${ic("dots",18)}</button></div>
+  <div class="mq-fbody"><div>${kids.map(k=>folderHTML(k,depth+1)).join("")}<div class="rows" data-mqcont="${f.id}">${bs.map(mqRow).join("")||(kids.length?"":`<p class="dim" style="margin:4px 2px;font-size:13px">No banks in this folder yet.</p>`)}</div></div></div></div>`;};
+ const unf=banks.filter(b=>!mqBFolder(b)).sort(mqByOrder);
+ return`<section class="sec"><span class="eyebrow">${plural(banks.length,"bank")} · ${plural(state.mqf.length,"folder")} · ${plural(nq,"question")}</span><h1 class="h1">MCQ Question bank</h1>
+ <p class="mq-desc">Exam-style questions with marked answers. To quiz yourself on your own cards, use Learn or Test inside a set.</p>
+ <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" data-act="mq-new">${ic("plus",16)}New bank</button><button class="btn" data-act="mq-import">${MQ_DL}Import .mcq</button><button class="btn" data-act="mq-newfolder">${ic("folderPlus",16)}New folder</button>${banks.length?`<button class="btn ${sm?"primary":""}" data-act="mq-sel-mode">${ic("check",16)}${sm?"Selecting":"Select"}</button>`:""}${banks.length>1||state.mqf.length>1?`<button class="btn" data-act="mq-sort-menu" data-scope="" aria-haspopup="menu">${ic("sort",16)}Sort <span class="dim" style="font-size:10px">▾</span></button>`:""}</div>
+ ${sm?`<p class="dim" style="margin:0;font-size:13px">${coarse?"Tap banks to select them.":"Click banks to select them, or drag across empty space to box-select."} Drag any selected bank by its handle to move them all.</p>`:""}</section>
+ ${mqResumeHTML()}
+ ${sm?"":`<div class="mq-quick"><button class="mq-q" data-act="mq-redo" ${wrongN?"":"disabled"}><b>${ic("reset",16)}Redo wrong ones</b><span>${wrongN?plural(wrongN,"question")+" still wrong":"Nothing to redo yet"}</span></button><button class="mq-q" data-act="mq-mixed" ${all.length?"":"disabled"}><b>${ic("shuffle",16)}Mixed practice</b><span>Pick banks, topics and how many</span></button><button class="mq-q" data-act="go" data-v="mqstats"><b>${MQ_CHART}Stats &amp; AI prompt</b><span>${weak?`Weakest: ${esc(weak.t)} · ${Math.round(weak.acc*100)}%`:"Accuracy by topic, history, most missed"}</span></button></div>`}
+ <section class="sec mq-lib" style="gap:10px">
+ ${mqFKids(null).map(f=>folderHTML(f,0)).join("")}
+ ${unf.length||state.mqf.length&&banks.length?`<div class="sec mq-unf" style="gap:8px">${state.mqf.length?`<span class="eyebrow" style="padding-top:4px">Unfiled</span>`:""}<div class="rows" data-mqcont="">${unf.map(mqRow).join("")}</div>${!unf.length?`<p class="drop-hint">Drop a bank here to take it out of its folder.</p>`:""}</div>`:""}
+ ${!banks.length?`<div class="empty">No question banks yet. Import a .mcq file (Claude can make one from a past paper and its markscheme), or make a bank yourself.<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center"><button class="btn primary" data-act="mq-import">${MQ_DL}Import .mcq</button><button class="btn" data-act="mq-new">${ic("plus",16)}New bank</button></div></div>`:""}
+ ${ui.mqHideEx?"":`<div class="sec" style="gap:8px"><span class="eyebrow" style="padding-top:4px">Example</span><div class="rows">${mqRow(mqExample())}</div></div>`}
+ </section>${sm?mqSelBar():""}`;}
+/* sort once, like Library */
+function mqFStamp(fid,mode){const op=ui.mqOpened||{};let m=0;mqBanksDeep(fid).forEach(b=>{m=Math.max(m,mode==="opened"?(op[b.id]||0):(b.updated||0));});return m;}
+function mqSortCmp(mode,kind){const op=ui.mqOpened||{};return(a,b)=>{const ta=kind==="f"?a.name:a.title,tb=kind==="f"?b.name:b.title;if(mode==="az")return natCmp(ta,tb);if(mode==="za")return natCmp(tb,ta);
+ const va=kind==="f"?mqFStamp(a.id,mode):mode==="opened"?(op[a.id]||0):(a.updated||0),vb=kind==="f"?mqFStamp(b.id,mode):mode==="opened"?(op[b.id]||0):(b.updated||0);return(vb-va)||natCmp(ta,tb);};}
+function mqApplySort(scope,mode){const snap={b:state.mqb.map(b=>[b.id,b.order]),f:state.mqf.map(f=>[f.id,f.order])};
+ const groups=scope?mqFDesc(scope):[null,...state.mqf.map(f=>f.id)];
+ groups.forEach(fid=>{state.mqb.filter(b=>mqBFolder(b)===fid).sort(mqSortCmp(mode,"b")).forEach((b,i)=>{if(b.order!==i){b.order=i;mqSaveQuiet(b);}});
+  if(fid)mqFKids(fid).sort(mqSortCmp(mode,"f")).forEach((f,i)=>{if(f.order!==i){f.order=i;saveMqFolder(f);}});});
  mqSortUndo=snap;render();const label=SORTS.find(x=>x[0]===mode)[1];
  toast(`${scope?`Sorted “${mqFolder(scope).name}”`:"Sorted all banks"} by ${label}`,{action:"Undo",act:"mq-sort-undo"});}
 function mqOpenSortMenu(btn){const scope=btn.dataset.scope||"";const open=$("#sort-menu");closeSortMenu();if(open&&open.dataset.scope==="mq:"+scope)return;
  const m=document.createElement("div");m.id="sort-menu";m.className="sort-menu";m.dataset.scope="mq:"+scope;m.setAttribute("role","menu");
- m.innerHTML=`<div class="hd">${scope?`Sort “${esc(mqFolder(scope).name)}”`:"Sort all banks"}</div>${SORTS.map(([k,l,icn])=>`<button role="menuitem" data-act="mq-sort-apply" data-scope="${scope}" data-v="${k}"><i>${icn?ic(icn,15):`<span class="mono">${k==="az"?"A↓":"Z↓"}</span>`}</i>${l}</button>`).join("")}<div class="note">Sorts once${scope?"":" (inside every folder, and the unfiled banks)"}. You can still drag afterwards.</div>`;
+ m.innerHTML=`<div class="hd">${scope?`Sort “${esc(mqFolder(scope).name)}”`:"Sort all banks"}</div>${SORTS.map(([k,l,icn])=>`<button role="menuitem" data-act="mq-sort-apply" data-scope="${scope}" data-v="${k}"><i>${icn?ic(icn,15):`<span class="mono">${k==="az"?"A↓":"Z↓"}</span>`}</i>${l}</button>`).join("")}<div class="note">Sorts once${scope?" (banks and subfolders inside)":" (banks and subfolders; top-level folders stay put)"}. You can still drag afterwards.</div>`;
  document.body.appendChild(m);const r=btn.getBoundingClientRect(),w=m.offsetWidth;
  m.style.left=Math.max(8,Math.min(r.left+scrollX,scrollX+innerWidth-w-8))+"px";m.style.top=(r.bottom+scrollY+6)+"px";const f=m.querySelector("button");if(f)f.focus({preventScroll:true});}
-function mqMove(id,folderId,beforeId){const b=state.mqb.find(x=>x.id===id);if(!b)return;const changed=(b.folderId||null)!==(folderId||null);b.folderId=folderId||null;
- const list=state.mqb.filter(x=>x!==b&&(x.folderId&&mqFolder(x.folderId)?x.folderId:null)===(folderId||null)).sort(mqByOrder);
- let at=beforeId?list.findIndex(x=>x.id===beforeId):list.length;if(at<0)at=list.length;list.splice(at,0,b);
- list.forEach((x,i)=>{if(x.order!==i||x===b){x.order=i;mqSaveQuiet(x);}});
- if(folderId){ui.mqCol=ui.mqCol||{};ui.mqCol[folderId]=false;saveUI();}
- render();if(changed)toast(folderId?`Moved to “${mqFolder(folderId).name}”`:"Moved out of the folder");}
-function mqStartDrag(e,row){const id=row.dataset.mqdrag;dragging=true;hideBubble();row.classList.add("drag-src");
+/* moving */
+function mqOpenAnc(fid){if(!fid)return;ui.mqCol=ui.mqCol||{};mqFAnc(fid).forEach(id=>{ui.mqCol[id]=false;});saveUI();}
+function mqMove(ids,folderId,beforeId){folderId=folderId||null;const moving=ids.map(id=>state.mqb.find(x=>x.id===id)).filter(Boolean);if(!moving.length)return;
+ const changed=moving.some(b=>mqBFolder(b)!==folderId);
+ const list=state.mqb.filter(x=>!ids.includes(x.id)&&mqBFolder(x)===folderId).sort(mqByOrder);
+ let at=beforeId?list.findIndex(x=>x.id===beforeId):list.length;if(at<0)at=list.length;list.splice(at,0,...moving);
+ moving.forEach(b=>{b.folderId=folderId;});
+ list.forEach((x,i)=>{if(x.order!==i||moving.includes(x)){x.order=i;mqSaveQuiet(x);}});
+ mqOpenAnc(folderId);render();
+ if(changed)toast(`${moving.length>1?plural(moving.length,"bank")+" moved":"Moved"} ${folderId?`to “${mqFolder(folderId).name}”`:"out of the folder"}`);}
+function mqMoveFolder(fid,parentId){const f=mqFolder(fid);if(!f)return;parentId=parentId||null;
+ if(parentId&&mqFDesc(fid).includes(parentId)){toast("A folder can't go inside itself");return;}
+ if(mqFParent(f)===parentId)return;f.parentId=parentId;f.order=mqFKids(parentId).filter(x=>x.id!==fid).length;saveMqFolder(f);mqOpenAnc(parentId);render();
+ toast(parentId?`Moved into “${mqFolder(parentId).name}”`:"Moved to the top level");}
+function mqFolderPicker(act,attrs,cur,exclude){exclude=exclude||[];const out=[];
+ const walk=(pid,d)=>mqFKids(pid).forEach(f=>{if(exclude.includes(f.id))return;out.push(`<button class="btn ${cur===f.id?"primary":""}" data-act="${act}" ${attrs} data-f="${f.id}" style="padding-left:${12+d*18}px">${ic("folder",16)}${esc(f.name)}</button>`);walk(f.id,d+1);});
+ walk(null,0);return out.join("");}
+/* dragging banks (one, or all selected) */
+function mqStartDrag(e,row,ids){dragging=true;hideBubble();const src=ids.map(id=>$(`.mq-row[data-mqdrag="${id}"]`)).filter(Boolean);src.forEach(r=>r.classList.add("drag-src"));
  const rc=row.getBoundingClientRect(),offX=e.clientX-rc.left,offY=e.clientY-rc.top;
- const ghost=row.cloneNode(true);ghost.classList.remove("drag-src");ghost.classList.add("drag-ghost");ghost.style.width=rc.width+"px";document.body.appendChild(ghost);
+ const ghost=row.cloneNode(true);ghost.classList.remove("drag-src","sel");ghost.classList.add("drag-ghost");ghost.style.width=rc.width+"px";if(ids.length>1)ghost.insertAdjacentHTML("beforeend",`<span class="drag-count">${ids.length}</span>`);document.body.appendChild(ghost);
  const line=document.createElement("div");line.className="drop-line";line.hidden=true;document.body.appendChild(line);
  let target=null,lastHot=null,openT=null;
  const place=(x,y)=>{ghost.style.transform=`translate(${x-offX}px,${y-offY}px) rotate(-1deg)`;};
  const hot=el=>{if(lastHot===el)return;if(lastHot)lastHot.classList.remove("drop-into");lastHot=el;if(el)el.classList.add("drop-into");clearTimeout(openT);
-  if(el&&el.classList.contains("mq-folder")&&el.classList.contains("closed")){openT=setTimeout(()=>{const t=el.querySelector("[data-act=mq-fold]");if(t){ui.mqCol=ui.mqCol||{};ui.mqCol[t.dataset.id]=false;saveUI();el.classList.remove("closed");}},650);}};
+  if(el&&el.classList.contains("mq-folder")&&el.classList.contains("closed")){openT=setTimeout(()=>{ui.mqCol=ui.mqCol||{};ui.mqCol[el.dataset.mqf]=false;saveUI();el.classList.remove("closed");},650);}};
  const find=(x,y)=>{const el=document.elementFromPoint(x,y);if(!el){line.hidden=true;hot(null);return null;}
-  const head=el.closest(".mq-fold");if(head){const fe=head.closest(".mq-folder"),t=fe.querySelector("[data-act=mq-fold]");line.hidden=true;hot(fe);return{folderId:t.dataset.id,beforeId:null};}
-  let cont=el.closest("[data-mqcont]");if(!cont){const fe=el.closest(".mq-folder"),un=el.closest(".mq-unf");cont=fe?fe.querySelector("[data-mqcont]"):un?un.querySelector("[data-mqcont]"):null;}
+  const head=el.closest(".mq-fold");if(head){const fe=head.closest(".mq-folder");line.hidden=true;hot(fe);return{folderId:fe.dataset.mqf,beforeId:null};}
+  let cont=el.closest("[data-mqcont]");if(!cont){const fe=el.closest(".mq-folder"),un=el.closest(".mq-unf");cont=fe?fe.querySelector(":scope > .mq-fbody > div > [data-mqcont]"):un?un.querySelector("[data-mqcont]"):null;}
   if(!cont){line.hidden=true;hot(null);return null;}const folderId=cont.dataset.mqcont||null;hot(folderId?cont.closest(".mq-folder"):cont.closest(".mq-unf"));
-  const rows=$$(":scope > .mq-row[data-mqdrag]",cont).filter(r=>r.dataset.mqdrag!==id);let before=null;for(const r of rows){const b=r.getBoundingClientRect();if(y<b.top+b.height/2){before=r;break;}}
+  const rows=$$(":scope > .mq-row[data-mqdrag]",cont).filter(r=>!ids.includes(r.dataset.mqdrag));let before=null;for(const r of rows){const b=r.getBoundingClientRect();if(y<b.top+b.height/2){before=r;break;}}
   const ref=before||rows[rows.length-1];
   if(ref){const b=ref.getBoundingClientRect();line.hidden=false;line.style.left=b.left+"px";line.style.width=b.width+"px";line.style.top=(before?b.top-5:b.bottom+3)+"px";}
   else{const b=cont.getBoundingClientRect();line.hidden=false;line.style.left=b.left+"px";line.style.width=Math.max(b.width,200)+"px";line.style.top=(b.top-2)+"px";}
   return{folderId,beforeId:before?before.dataset.mqdrag:null};};
  place(e.clientX,e.clientY);target=find(e.clientX,e.clientY);
  const mv=ev=>{ev.preventDefault();place(ev.clientX,ev.clientY);autoscroll(ev.clientY);target=find(ev.clientX,ev.clientY);};
- const up=()=>{document.removeEventListener("pointermove",mv);document.removeEventListener("pointercancel",up);clearTimeout(openT);ghost.remove();line.remove();if(lastHot)lastHot.classList.remove("drop-into");row.classList.remove("drag-src");dragging=false;mqDragSup=Date.now();
-  if(target)mqMove(id,target.folderId,target.beforeId);};
+ const up=()=>{document.removeEventListener("pointermove",mv);document.removeEventListener("pointercancel",up);clearTimeout(openT);ghost.remove();line.remove();if(lastHot)lastHot.classList.remove("drop-into");src.forEach(r=>r.classList.remove("drag-src"));dragging=false;mqDragSup=Date.now();
+  if(target)mqMove(ids,target.folderId,target.beforeId);};
  document.addEventListener("pointermove",mv,{passive:false});document.addEventListener("pointerup",up,{once:true});document.addEventListener("pointercancel",up,{once:true});}
-document.addEventListener("pointerdown",e=>{if(view.name!=="mq")return;const h=e.target.closest&&e.target.closest(".mq-handle");if(!h||(e.pointerType==="mouse"&&e.button!==0))return;
- const row=h.closest(".mq-row");if(!row)return;e.preventDefault();const sx=e.clientX,sy=e.clientY;
- const mv=ev=>{if(Math.hypot(ev.clientX-sx,ev.clientY-sy)>4){cl();mqStartDrag(ev,row);}};const cl=()=>{document.removeEventListener("pointermove",mv);document.removeEventListener("pointerup",cl);};
- document.addEventListener("pointermove",mv);document.addEventListener("pointerup",cl);});
+/* dragging a folder onto another folder (or back to the top level) */
+function mqStartFolderDrag(e,fe){dragging=true;hideBubble();const fid=fe.dataset.mqf,f=mqFolder(fid);if(!f){dragging=false;return;}const banned=new Set(mqFDesc(fid));fe.classList.add("drag-src");
+ const head=fe.querySelector(":scope > .mq-fold");const rc=head.getBoundingClientRect(),offX=e.clientX-rc.left,offY=e.clientY-rc.top;
+ const ghost=head.cloneNode(true);ghost.classList.add("drag-ghost","mq-fghost");ghost.style.width=rc.width+"px";document.body.appendChild(ghost);
+ const lib=$(".mq-lib");const top=document.createElement("div");top.className="top-drop mq-top";top.textContent="Move to top level";if(mqFParent(f)&&lib)lib.prepend(top);
+ let target,lastHot=null,openT=null;
+ const hot=el=>{if(lastHot===el)return;if(lastHot)lastHot.classList.remove("drop-into");lastHot=el;if(el)el.classList.add("drop-into");clearTimeout(openT);
+  if(el&&el.classList.contains("mq-folder")&&el.classList.contains("closed")){openT=setTimeout(()=>{ui.mqCol=ui.mqCol||{};ui.mqCol[el.dataset.mqf]=false;saveUI();el.classList.remove("closed");},650);}};
+ const find=(x,y)=>{const el=document.elementFromPoint(x,y);if(!el){hot(null);return undefined;}if(el.closest(".mq-top")){hot(top);return null;}
+  const h=el.closest(".mq-fold");const t=h&&h.closest(".mq-folder");if(t&&!banned.has(t.dataset.mqf)){hot(t);return t.dataset.mqf;}hot(null);return undefined;};
+ const place=(x,y)=>{ghost.style.transform=`translate(${x-offX}px,${y-offY}px) rotate(-1deg)`;};
+ place(e.clientX,e.clientY);
+ const mv=ev=>{ev.preventDefault();place(ev.clientX,ev.clientY);autoscroll(ev.clientY);target=find(ev.clientX,ev.clientY);};
+ const up=()=>{document.removeEventListener("pointermove",mv);document.removeEventListener("pointercancel",up);clearTimeout(openT);ghost.remove();top.remove();if(lastHot)lastHot.classList.remove("drop-into");fe.classList.remove("drag-src");dragging=false;mqDragSup=Date.now();
+  if(target!==undefined)mqMoveFolder(fid,target);};
+ document.addEventListener("pointermove",mv,{passive:false});document.addEventListener("pointerup",up,{once:true});document.addEventListener("pointercancel",up,{once:true});}
+document.addEventListener("pointerdown",e=>{if(view.name!=="mq")return;const t=e.target;if(!t.closest||(e.pointerType==="mouse"&&e.button!==0))return;
+ const bh=t.closest(".mq-handle"),fh=t.closest(".mq-fhandle");
+ if(bh||fh){const row=bh&&bh.closest(".mq-row"),fe=fh&&fh.closest(".mq-folder");if(!row&&!fe)return;e.preventDefault();const sx=e.clientX,sy=e.clientY;
+  const mv=ev=>{if(Math.hypot(ev.clientX-sx,ev.clientY-sy)>4){cl();if(fe)mqStartFolderDrag(ev,fe);else{const id=row.dataset.mqdrag;mqStartDrag(ev,row,view.mqSel&&mqSel.has(id)?mqSelOrdered():[id]);}}};
+  const cl=()=>{document.removeEventListener("pointermove",mv);document.removeEventListener("pointerup",cl);};
+  document.addEventListener("pointermove",mv);document.addEventListener("pointerup",cl);return;}
+ /* box-select with the mouse in select mode */
+ if(!view.mqSel||e.pointerType!=="mouse"||!t.closest("#main")||t.closest(".mq-row,button,input,select,a,.sel-bar,.mq-fold"))return;
+ e.preventDefault();const sx=e.clientX+scrollX,sy=e.clientY+scrollY,base=(e.shiftKey||e.metaKey||e.ctrlKey)?new Set(mqSel):new Set();
+ const box=document.createElement("div");box.className="marquee";document.body.appendChild(box);
+ const rows=$$(".mq-row[data-mqdrag]").filter(r=>!r.closest(".mq-folder.closed")).map(r=>({r,id:r.dataset.mqdrag}));let cx=e.clientX,cy=e.clientY;
+ const paint=()=>{const x=cx+scrollX,y=cy+scrollY,L=Math.min(sx,x),T=Math.min(sy,y),R=Math.max(sx,x),B=Math.max(sy,y);
+  box.style.left=(L-scrollX)+"px";box.style.top=(T-scrollY)+"px";box.style.width=(R-L)+"px";box.style.height=(B-T)+"px";
+  rows.forEach(({r,id})=>{const rc=r.getBoundingClientRect(),rl=rc.left+scrollX,rt=rc.top+scrollY;const on=(rl<R&&rl+rc.width>L&&rt<B&&rt+rc.height>T)||base.has(id);if(on)mqSel.add(id);else mqSel.delete(id);r.classList.toggle("sel",on);const c=r.querySelector(".selc");if(c)c.classList.toggle("on",on);});
+  const n=$("#mq-sel-n");if(n)n.textContent=mqSel.size+" selected";};
+ const mv=ev=>{cx=ev.clientX;cy=ev.clientY;paint();autoscroll(ev.clientY);};
+ const up=()=>{document.removeEventListener("pointermove",mv);box.remove();mqDragSup=Date.now();mqUpdSel();};
+ document.addEventListener("pointermove",mv);document.addEventListener("pointerup",up,{once:true});});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&view.name==="mq"&&view.mqSel&&!modal&&!$("#sort-menu")){view.mqSel=false;mqSel.clear();render();}});
+/* export one or several banks into one .mcq */
+async function mqExport(ids){ids=(Array.isArray(ids)?ids:[ids]);const banks=ids.map(id=>state.mqb.find(b=>b.id===id)).filter(Boolean);if(!banks.length)return;
+ const doit=async()=>{toast("Preparing export…");const fids=uniq(banks.map(mqBFolder));const fpath=fids.length===1&&fids[0]?mqFPath(fids[0]).join("/"):null;
+  const d=async x=>{if(!x)return undefined;if(/^data:/.test(x))return x;try{const r=await fetch(mqSrc(x));if(r.ok)return await blobToDataURL(await r.blob());}catch(e){}return undefined;};
+  const out={format:"mcq",version:1,exported:Date.now(),folder:fpath,banks:[]};
+  for(const b of banks){const ob={title:b.title,desc:b.desc||"",questions:[]};
+   for(const q of b.qs||[]){const o={q:q.q,opts:[],ans:q.ans.map(id=>q.opts.findIndex(o=>o.id===id)).filter(k=>k>=0)};const qi=await d(q.img);if(qi)o.img=qi;
+    for(const op of q.opts){const x={t:op.t};const oi=await d(op.img);if(oi)x.img=oi;o.opts.push(x);}
+    ["ex","topic","src"].forEach(k=>{if(q[k])o[k]=q[k];});if(q.diff)o.diff=q.diff;if(q.tags&&q.tags.length)o.tags=q.tags;if(q.keep)o.keep=true;if(q.key==="ai")o.key="ai";if(q.starred)o.starred=true;ob.questions.push(o);}
+   out.banks.push(ob);}
+  const base=banks.length===1?banks[0].title:fpath?fpath.split("/").pop():`${banks.length} banks`;const name=base.replace(/[\\/:*?"<>|]+/g,"-").slice(0,80)+".mcq",text=JSON.stringify(out);
+  if(DESK){const ok=await DESK.saveFile(name,text);if(ok)toast("Exported "+name);}
+  else{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type:"application/json"}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000);toast("Exported "+name);}};
+ if(banks.some(b=>(b.qs||[]).some(q=>q.src)))confirmBox("Share past-paper questions carefully","Some questions have a past-paper source. IB papers are copyrighted: using them for your own practice is fine, but don't share them publicly.","Export",doit);else doit();}
+function mqDeleteBanks(ids){ids.forEach(id=>{const b=state.mqb.find(x=>x.id===id);if(!b)return;deleteAssets(mqImgIds(b));state.mqb=state.mqb.filter(x=>x.id!==id);queueWrite("mqb/"+id,null,true);if(state.mqs.some(x=>x.id===id)){state.mqs=state.mqs.filter(x=>x.id!==id);queueWrite("mqs/"+id,null,true);}mqSel.delete(id);});}
+function mqResetBanks(ids){ids.forEach(id=>{const s=state.mqs.find(x=>x.id===id);if(s){s.q={};s.ss=[];mqSaveStats(id);}});}
+function mqExamPool(M){return mqPairs(M.banks.map(mqBank).filter(Boolean)).filter(({b,q})=>!M.starred||mqIsStar(b,q));}
 Object.assign(MQA,{
- "mq-sort-menu":el=>mqOpenSortMenu(el),
+ "mq-sel-mode":()=>{view.mqSel=!view.mqSel;mqSel.clear();render();},
+ "mq-sel-done":()=>{view.mqSel=false;mqSel.clear();render();},
+ "mq-sel-toggle":el=>{if(Date.now()-mqDragSup<300)return;const id=el.dataset.id;if(mqSel.has(id))mqSel.delete(id);else mqSel.add(id);mqUpdSel();},
+ "mq-sel-all":()=>{const ids=state.mqb.map(b=>b.id);const all=ids.length&&ids.every(id=>mqSel.has(id));mqSel.clear();if(!all)ids.forEach(id=>mqSel.add(id));mqUpdSel();},
+ "mq-sel-practise":()=>{const ids=mqSelOrdered();if(!ids.length)return;mqMod={kind:"mix",banks:ids,topics:[],diff:"",n:Math.min(20,mqPairs(ids.map(mqBank)).length)||10,starred:false};openModal("",null);mqModRender();},
+ "mq-sel-exam":()=>{const ids=mqSelOrdered();if(!ids.length)return;const M={kind:"exam",banks:ids,title:ids.length===1?mqBank(ids[0]).title:plural(ids.length,"bank"),min:30,preset:true,starred:false};M.max=mqExamPool(M).length;M.n=Math.min(M.max,20);mqMod=M;openModal("",null);mqModRender();},
+ "mq-sel-move":()=>{const ids=mqSelOrdered();if(!ids.length)return;openModal(`<h2 class="h2">Move ${plural(ids.length,"bank")}</h2><div class="mq-menu"><button class="btn" data-act="mq-move-to" data-ids="${ids.join(",")}" data-f="">No folder</button>${mqFolderPicker("mq-move-to",`data-ids="${ids.join(",")}"`,null)}</div><div class="dialog-actions"><button class="btn ghost" data-act="modal-no">Cancel</button></div>`);},
+ "mq-sel-export":()=>{const ids=mqSelOrdered();if(ids.length)mqExport(ids);},
+ "mq-sel-reset":()=>{const ids=mqSelOrdered();if(!ids.length)return;confirmBox(`Reset history for ${plural(ids.length,"bank")}?`,"Their scores, mistakes and history are cleared. The questions stay.","Reset",()=>{mqResetBanks(ids);render();toast("History cleared");});},
+ "mq-sel-del":()=>{const ids=mqSelOrdered();if(!ids.length)return;const nq=ids.reduce((a,id)=>a+((mqBank(id)||{}).qs||[]).length,0);confirmBox(`Delete ${plural(ids.length,"bank")}?`,`${plural(nq,"question")}, their pictures and answer history are deleted.`,"Delete",()=>{mqDeleteBanks(ids);render();toast(`${plural(ids.length,"bank")} deleted`);});},
+ "mq-move":el=>{const b=mqBank(el.dataset.id);if(!b)return;const cur=mqBFolder(b);openModal(`<h2 class="h2">Move “${esc(b.title)}”</h2><div class="mq-menu"><button class="btn ${!cur?"primary":""}" data-act="mq-move-to" data-ids="${b.id}" data-f="">No folder</button>${mqFolderPicker("mq-move-to",`data-ids="${b.id}"`,cur)}</div><div class="dialog-actions"><button class="btn ghost" data-act="modal-no">Cancel</button></div>`);},
+ "mq-move-to":el=>{const ids=(el.dataset.ids||el.dataset.id||"").split(",").filter(Boolean);closeModal();mqMove(ids,el.dataset.f||null,null);},
+ "mq-newfolder":()=>promptBox("New MCQ folder","Name","","Create",name=>{name=String(name||"").trim().slice(0,80);if(!name)return;const f={id:uid(),name,parentId:null,order:mqFKids(null).length,created:Date.now()};state.mqf.push(f);saveMqFolder(f);render();}),
+ "mq-fmenu":el=>{const f=mqFolder(el.dataset.id);if(!f)return;openModal(`<h2 class="h2">${esc(f.name)}</h2>${mqFParent(f)?`<p class="dim" style="margin:0;font-size:13px">In ${esc(mqFPath(mqFParent(f)).join(" › "))}</p>`:""}<div class="mq-menu"><button class="btn" data-act="mq-frename" data-id="${f.id}">${ic("edit",16)}Rename</button><button class="btn" data-act="mq-fsub" data-id="${f.id}">${ic("folderPlus",16)}New subfolder</button><button class="btn" data-act="mq-fmove" data-id="${f.id}">${ic("move",16)}Move folder</button><button class="btn danger" data-act="mq-fdel" data-id="${f.id}">${ic("trash",16)}Delete folder</button></div><div class="dialog-actions"><button class="btn ghost" data-act="modal-no">Close</button></div>`);},
+ "mq-fsub":el=>{const p=mqFolder(el.dataset.id);if(!p)return;closeModal();setTimeout(()=>promptBox(`New folder in “${p.name}”`,"Name","","Create",name=>{name=String(name||"").trim().slice(0,80);if(!name)return;const f={id:uid(),name,parentId:p.id,order:mqFKids(p.id).length,created:Date.now()};state.mqf.push(f);saveMqFolder(f);mqOpenAnc(p.id);render();}),250);},
+ "mq-fmove":el=>{const f=mqFolder(el.dataset.id);if(!f)return;const cur=mqFParent(f);openModal(`<h2 class="h2">Move “${esc(f.name)}”</h2><div class="mq-menu"><button class="btn ${!cur?"primary":""}" data-act="mq-fmove-to" data-id="${f.id}" data-f="">Top level</button>${mqFolderPicker("mq-fmove-to",`data-id="${f.id}"`,cur,mqFDesc(f.id))}</div><div class="dialog-actions"><button class="btn ghost" data-act="modal-no">Cancel</button></div>`);},
+ "mq-fmove-to":el=>{closeModal();mqMoveFolder(el.dataset.id,el.dataset.f||null);},
+ "mq-fdel":el=>{const f=mqFolder(el.dataset.id);if(!f)return;closeModal();const up=mqFParent(f);setTimeout(()=>confirmBox(`Delete folder “${f.name}”?`,"Its banks and subfolders move up one level. No questions are deleted.","Delete",()=>{
+   state.mqb.filter(b=>b.folderId===f.id).forEach(b=>{b.folderId=up;mqSaveQuiet(b);});state.mqf.filter(x=>x.parentId===f.id).forEach(x=>{x.parentId=up;saveMqFolder(x);});
+   state.mqf=state.mqf.filter(x=>x.id!==f.id);queueWrite("mqf/"+f.id,null,true);render();toast("Folder deleted");}),250);},
+ "mq-export":el=>{closeModal();mqExport([el.dataset.id]);},
+ "mq-star":el=>{const on=mqToggleStar(el.dataset.b,el.dataset.q);if(view.name==="mqrun")render();else softRender();toast(on?"Starred":"Star removed");},
+ "mq-staronly":()=>{ui.mqStarOnly=!ui.mqStarOnly;saveUI();softRender();},
+ "mq-practice":el=>{const b=mqBank(el.dataset.id);if(!b)return;ui.mqLast=b.id;saveUI();const fromList=el.dataset.from!=null,from=fromList?+el.dataset.from:0;
+  let list=mqPairs([b]);const so=!fromList&&ui.mqStarOnly&&mqStarN(b)>0;if(so)list=list.filter(({q})=>mqIsStar(b,q));
+  mqStart("practice",list,{title:so?b.title+" · starred":b.title,bank:b.id,shuffle:ui.mqShuffle&&!fromList,from:ui.mqShuffle&&!fromList?0:from,back:{name:"mqbank",id:b.id}});},
+ "mq-exam-setup":el=>{const b=mqBank(el.dataset.id);if(!b)return;const M={kind:"exam",banks:[b.id],title:b.title,min:30,preset:true,starred:false};M.max=mqExamPool(M).length;M.n=Math.min(M.max,20);mqMod=M;openModal("",null);mqModRender();},
+ "mq-x-star":el=>{mqModalSync();mqMod.starred=el.checked;mqMod.max=mqExamPool(mqMod).length;mqMod.n=Math.min(Math.max(1,mqMod.n),mqMod.max)||1;mqModRender();},
+ "mq-x-start":()=>{mqModalSync();const M=mqMod,pool=mqExamPool(M);if(!pool.length)return;const mins=M.preset?M.n*1.5:M.min;closeModal();const old=mqSavedExam();if(old)mqClearExam();
+  const one=M.banks.length===1?M.banks[0]:null;if(one){ui.mqLast=one;saveUI();}
+  mqStart("exam",shuffle(pool).slice(0,M.n),{title:M.title+(M.starred?" · starred":""),bank:one,limit:Math.round(mins*60000),back:one?{name:"mqbank",id:one}:{name:"mq"}});},
  "mq-sort-apply":el=>{closeSortMenu();mqApplySort(el.dataset.scope||null,el.dataset.v);},
- "mq-sort-undo":()=>{const u=mqSortUndo;if(!u)return;mqSortUndo=null;u.forEach(([id,o])=>{const b=state.mqb.find(x=>x.id===id);if(b&&b.order!==o){b.order=o;mqSaveQuiet(b);}});render();toast("Order restored");}
+ "mq-sort-undo":()=>{const u=mqSortUndo;if(!u)return;mqSortUndo=null;u.b.forEach(([id,o])=>{const b=state.mqb.find(x=>x.id===id);if(b&&b.order!==o){b.order=o;mqSaveQuiet(b);}});u.f.forEach(([id,o])=>{const f=mqFolder(id);if(f&&f.order!==o){f.order=o;saveMqFolder(f);}});render();toast("Order restored");}
 });
 if(window.__FC_TEST){const T=window.__fcTest||(window.__fcTest={});Object.defineProperties(T,{mqSession:{get:()=>session},mqDraft:{get:()=>mqDraft}});T.mqImport=mqImport;T.saveMqBank=saveMqBank;T.mqRecord=mqRecord;T.mqSaveStats=mqSaveStats;T.queueWrite=queueWrite;T.mqExample=mqExample;T.mqPromptText=()=>mqPM&&mqPromptText();T.view=()=>view;}
 
