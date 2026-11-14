@@ -896,6 +896,7 @@ mark.hl .mx{background:transparent}
 /* card: keep the layer BEHIND the text without re-positioning the text (iPhone Safari would show the back of the card through the front) */
 .hap.under{z-index:-1}
 .fc .face-body.hap-host{isolation:isolate}
+.fc .face-body>.hap+*{margin-top:auto}
 .fc .face *{-webkit-backface-visibility:hidden;backface-visibility:hidden}
 .fc .face-top{pointer-events:none}.fc .face-top button{pointer-events:auto}
 .mq-folder{display:flex;flex-direction:column;gap:8px}
