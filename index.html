@@ -889,6 +889,13 @@ mark.hl .mx{background:transparent}
 .mq-lr .mq-star{width:28px;height:28px;margin:-6px -6px -6px 0}
 .mq-checks label>span{min-width:0}
 .mq-selbar .sel-acts{flex-wrap:wrap}
+/* haptic tap layers */
+.hap-host{position:relative}
+.hap{position:absolute;inset:0;z-index:3;border-radius:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:inherit;margin:0}
+.hap input{position:absolute;width:1px;height:1px;margin:0;visibility:hidden;pointer-events:none}
+.hap.under{z-index:0}
+.fc .face-body>:not(.hap),.fc .face>:not(.hap){position:relative;z-index:1}
+.fc .face-top{pointer-events:none}.fc .face-top button{pointer-events:auto}
 .mq-folder{display:flex;flex-direction:column;gap:8px}
 .mq-fbody{display:grid;grid-template-rows:1fr;transition:grid-template-rows .3s var(--ease),opacity .22s ease}
 .mq-fbody>div{min-height:0;overflow:hidden;padding:2px 4px 6px;margin:-2px -4px -6px}
@@ -5403,6 +5410,7 @@ function vSettings(){
   <div class="setting"><div class="sm"><b>Your name</b><span>Used in the greeting on Home. Leave blank for none.</span></div><input id="s-name" class="inp" style="max-width:200px" maxlength="30" placeholder="Your name" value="${esc(st.name||"")}" autocomplete="off"></div>
   <div class="setting col"><div class="sm"><b>Colour scheme</b><span>The palettes from IB Tracker. Some come in light and dark, some in only one.</span></div>${schemePicker("set-scheme")}</div>
   ${DESK&&DESK.dockIcon?`<div class="setting"><div class="sm"><b>Match Dock icon to colour scheme</b><span>While Flashcards is running, its Dock icon takes on your colour scheme and light or dark look. Finder and Launchpad keep the standard icon.</span></div><button class="switch ${state.settings.dockIcon!==false?"on":""}" data-act="dock-toggle" role="switch" aria-checked="${state.settings.dockIcon!==false}" aria-label="Match Dock icon to colour scheme"></button></div>`:""}
+  ${HAP_TOUCH?`<div class="setting"><div class="sm"><b>Haptic taps</b><span>A light tick when you flip a card, mark Know / Still learning, or answer an MCQ.</span></div><button class="switch ${state.settings.haptics!==false?"on":""}" data-act="hap-toggle" role="switch" aria-checked="${state.settings.haptics!==false}" aria-label="Haptic taps"></button></div>`:""}
   <div class="setting"><div class="sm"><b>Light or dark</b><span>System follows your device.</span></div>${modeSeg("set-theme")}</div>
   <div class="setting col"><div class="sm"><b>Set colours</b><span>Used for each set's line on the forgetting-curve chart and its recall ring. New sets take the next colour in order. Click a colour to change it.</span></div>
    <div class="pal">${currentPal().map((c,i)=>`<span class="pal-c"><label style="background:${c}" title="Change colour ${i+1}"><input type="color" data-pal="${i}" value="${c.toLowerCase()}" aria-label="Colour ${i+1}"></label>${currentPal().length>1?`<button class="pal-x" data-act="pal-del" data-i="${i}" aria-label="Remove colour ${i+1}">${ic("x",11)}</button>`:""}</span>`).join("")}
@@ -6483,6 +6491,22 @@ Object.assign(MQA,{
  "mq-sort-apply":el=>{closeSortMenu();mqApplySort(el.dataset.scope||null,el.dataset.v);},
  "mq-sort-undo":()=>{const u=mqSortUndo;if(!u)return;mqSortUndo=null;u.b.forEach(([id,o])=>{const b=state.mqb.find(x=>x.id===id);if(b&&b.order!==o){b.order=o;mqSaveQuiet(b);}});u.f.forEach(([id,o])=>{const f=mqFolder(id);if(f&&f.order!==o){f.order=o;saveMqFolder(f);}});render();toast("Order restored");}
 });
+
+/* ================= Haptic taps (iPhone / iPad) =================
+   iPhone Safari has no vibration API. Its built-in on/off switch gives a light system "tick" when the user's own tap toggles it,
+   so a transparent <label> wired to a hidden switch sits under/over the places that should tick: the tap still does its normal job.
+   Android gets a short navigator.vibrate instead. */
+const HAP_TOUCH=matchMedia("(pointer: coarse)").matches;
+const hapOn=()=>HAP_TOUCH&&state.settings.haptics!==false;
+const HAP_SEL='.fc .face-body, .fc .face, [data-act="fc-mark"], .fc-ctrl [data-act="flip"], .mq-opt:not([disabled]), [data-act="mq-check"]:not([disabled]), [data-act="mq-next"]';
+function hapDecorate(){if(!hapOn()){$$(".hap").forEach(l=>l.remove());return;}
+ $$(HAP_SEL).forEach(el=>{if(el.querySelector(":scope > .hap"))return;const l=document.createElement("label");l.className="hap";l.setAttribute("aria-hidden","true");
+  const i=document.createElement("input");i.type="checkbox";i.setAttribute("switch","");i.tabIndex=-1;i.addEventListener("click",e=>e.stopPropagation());l.appendChild(i);
+  el.classList.add("hap-host");if(el.matches(".face-body,.face"))l.classList.add("under");el.insertBefore(l,el.firstChild);});}
+{const _r=render;render=function(){const r=_r.apply(this,arguments);try{hapDecorate();}catch(e){}return r;};}
+{const _s=softRender;softRender=function(){const r=_s.apply(this,arguments);try{hapDecorate();}catch(e){}return r;};}
+document.addEventListener("click",e=>{if(!hapOn()||!navigator.vibrate||/iP(hone|ad|od)/.test(navigator.userAgent)||e.target.tagName==="INPUT")return;const t=e.target.closest&&e.target.closest(HAP_SEL);if(t)try{navigator.vibrate(8);}catch(er){}},true);
+Object.assign(MQA,{"hap-toggle":()=>{state.settings.haptics=state.settings.haptics===false;saveSettings();hapDecorate();render();}});
 if(window.__FC_TEST){const T=window.__fcTest||(window.__fcTest={});Object.defineProperties(T,{mqSession:{get:()=>session},mqDraft:{get:()=>mqDraft}});T.mqImport=mqImport;T.saveMqBank=saveMqBank;T.mqRecord=mqRecord;T.mqSaveStats=mqSaveStats;T.queueWrite=queueWrite;T.mqExample=mqExample;T.mqPromptText=()=>mqPM&&mqPromptText();T.view=()=>view;}
 
 /* ================= import / export ================= */
@@ -6820,7 +6844,10 @@ document.addEventListener("click",e=>{
  const el=e.target.closest("[data-act]");if(!el||el.disabled)return;
  if(el.tagName==="INPUT")return;
  if(el.dataset.act==="flip"&&el.classList.contains("fc")&&isSelectGesture(e))return;
- const f=A[el.dataset.act];if(!f)return;e.preventDefault();
+ const f=A[el.dataset.act];if(!f)return;
+ /* haptic layer: let the tap reach its hidden switch (that's what makes the iPhone tick), then do the action */
+ if(e.target.closest&&e.target.closest(".hap")){setTimeout(()=>f(el,e),0);return;}
+ e.preventDefault();
  /* switches: let the knob slide before the page changes around it */
  if(el.classList.contains("switch")&&!matchMedia("(prefers-reduced-motion: reduce)").matches){if(el.dataset.anim)return;el.dataset.anim="1";const on=!el.classList.contains("on");el.classList.toggle("on",on);el.setAttribute("aria-checked",String(on));setTimeout(()=>{delete el.dataset.anim;f(el,e);},240);return;}
  f(el,e);
