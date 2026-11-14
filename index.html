@@ -893,8 +893,10 @@ mark.hl .mx{background:transparent}
 .hap-host.hap-rel{position:relative}
 .hap{position:absolute;inset:0;z-index:3;border-radius:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:inherit;margin:0}
 .hap input{position:absolute;width:1px;height:1px;margin:0;visibility:hidden;pointer-events:none}
-.hap.under{z-index:0}
-.fc .face-body>:not(.hap),.fc .face>:not(.hap){position:relative;z-index:1}
+/* card: keep the layer BEHIND the text without re-positioning the text (iPhone Safari would show the back of the card through the front) */
+.hap.under{z-index:-1}
+.fc .face-body.hap-host{isolation:isolate}
+.fc .face *{-webkit-backface-visibility:hidden;backface-visibility:hidden}
 .fc .face-top{pointer-events:none}.fc .face-top button{pointer-events:auto}
 .mq-folder{display:flex;flex-direction:column;gap:8px}
 .mq-fbody{display:grid;grid-template-rows:1fr;transition:grid-template-rows .3s var(--ease),opacity .22s ease}
@@ -6498,11 +6500,11 @@ Object.assign(MQA,{
    Android gets a short navigator.vibrate instead. */
 const HAP_TOUCH=matchMedia("(pointer: coarse)").matches;
 const hapOn=()=>HAP_TOUCH&&state.settings.haptics!==false;
-const HAP_SEL='.fc .face-body, .fc .face, [data-act="fc-mark"], .fc-ctrl [data-act="flip"], .mq-opt:not([disabled]), [data-act="mq-check"]:not([disabled]), [data-act="mq-next"], [data-act="learn-mcq"]:not([disabled]), [data-act="learn-next"], [data-act="t-mcq"]:not([disabled]), [data-act="t-tf"]:not([disabled]), [data-act="star"], .mq-star';
+const HAP_SEL='.fc .face-body, [data-act="fc-mark"], .fc-ctrl [data-act="flip"], .mq-opt:not([disabled]), [data-act="mq-check"]:not([disabled]), [data-act="mq-next"], [data-act="learn-mcq"]:not([disabled]), [data-act="learn-next"], [data-act="t-mcq"]:not([disabled]), [data-act="t-tf"]:not([disabled]), [data-act="star"], .mq-star';
 function hapDecorate(){if(!hapOn()){$$(".hap").forEach(l=>l.remove());return;}
  $$(HAP_SEL).forEach(el=>{if(el.querySelector(":scope > .hap"))return;const l=document.createElement("label");l.className="hap";l.setAttribute("aria-hidden","true");
   const i=document.createElement("input");i.type="checkbox";i.setAttribute("switch","");i.tabIndex=-1;i.addEventListener("click",e=>e.stopPropagation());l.appendChild(i);
-  el.classList.add("hap-host");if(getComputedStyle(el).position==="static")el.classList.add("hap-rel");if(el.matches(".face-body,.face"))l.classList.add("under");el.insertBefore(l,el.firstChild);});}
+  el.classList.add("hap-host");if(getComputedStyle(el).position==="static")el.classList.add("hap-rel");if(el.matches(".face-body"))l.classList.add("under");el.insertBefore(l,el.firstChild);});}
 {const _r=render;render=function(){const r=_r.apply(this,arguments);try{hapDecorate();}catch(e){}return r;};}
 {const _s=softRender;softRender=function(){const r=_s.apply(this,arguments);try{hapDecorate();}catch(e){}return r;};}
 document.addEventListener("click",e=>{if(!hapOn()||!navigator.vibrate||/iP(hone|ad|od)/.test(navigator.userAgent)||e.target.tagName==="INPUT")return;const t=e.target.closest&&e.target.closest(HAP_SEL);if(t)try{navigator.vibrate(8);}catch(er){}},true);
