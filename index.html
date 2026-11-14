@@ -890,7 +890,7 @@ mark.hl .mx{background:transparent}
 .mq-checks label>span{min-width:0}
 .mq-selbar .sel-acts{flex-wrap:wrap}
 /* haptic tap layers */
-.hap-host{position:relative}
+.hap-host.hap-rel{position:relative}
 .hap{position:absolute;inset:0;z-index:3;border-radius:inherit;-webkit-tap-highlight-color:transparent;touch-action:manipulation;cursor:inherit;margin:0}
 .hap input{position:absolute;width:1px;height:1px;margin:0;visibility:hidden;pointer-events:none}
 .hap.under{z-index:0}
@@ -5410,7 +5410,7 @@ function vSettings(){
   <div class="setting"><div class="sm"><b>Your name</b><span>Used in the greeting on Home. Leave blank for none.</span></div><input id="s-name" class="inp" style="max-width:200px" maxlength="30" placeholder="Your name" value="${esc(st.name||"")}" autocomplete="off"></div>
   <div class="setting col"><div class="sm"><b>Colour scheme</b><span>The palettes from IB Tracker. Some come in light and dark, some in only one.</span></div>${schemePicker("set-scheme")}</div>
   ${DESK&&DESK.dockIcon?`<div class="setting"><div class="sm"><b>Match Dock icon to colour scheme</b><span>While Flashcards is running, its Dock icon takes on your colour scheme and light or dark look. Finder and Launchpad keep the standard icon.</span></div><button class="switch ${state.settings.dockIcon!==false?"on":""}" data-act="dock-toggle" role="switch" aria-checked="${state.settings.dockIcon!==false}" aria-label="Match Dock icon to colour scheme"></button></div>`:""}
-  ${HAP_TOUCH?`<div class="setting"><div class="sm"><b>Haptic taps</b><span>A light tick when you flip a card, mark Know / Still learning, or answer an MCQ.</span></div><button class="switch ${state.settings.haptics!==false?"on":""}" data-act="hap-toggle" role="switch" aria-checked="${state.settings.haptics!==false}" aria-label="Haptic taps"></button></div>`:""}
+  ${HAP_TOUCH?`<div class="setting"><div class="sm"><b>Haptic taps</b><span>A light tick when you flip a card, mark Know / Still learning, star something, or answer a multiple-choice question in Learn, Test or the MCQ bank.</span></div><button class="switch ${state.settings.haptics!==false?"on":""}" data-act="hap-toggle" role="switch" aria-checked="${state.settings.haptics!==false}" aria-label="Haptic taps"></button></div>`:""}
   <div class="setting"><div class="sm"><b>Light or dark</b><span>System follows your device.</span></div>${modeSeg("set-theme")}</div>
   <div class="setting col"><div class="sm"><b>Set colours</b><span>Used for each set's line on the forgetting-curve chart and its recall ring. New sets take the next colour in order. Click a colour to change it.</span></div>
    <div class="pal">${currentPal().map((c,i)=>`<span class="pal-c"><label style="background:${c}" title="Change colour ${i+1}"><input type="color" data-pal="${i}" value="${c.toLowerCase()}" aria-label="Colour ${i+1}"></label>${currentPal().length>1?`<button class="pal-x" data-act="pal-del" data-i="${i}" aria-label="Remove colour ${i+1}">${ic("x",11)}</button>`:""}</span>`).join("")}
@@ -6498,11 +6498,11 @@ Object.assign(MQA,{
    Android gets a short navigator.vibrate instead. */
 const HAP_TOUCH=matchMedia("(pointer: coarse)").matches;
 const hapOn=()=>HAP_TOUCH&&state.settings.haptics!==false;
-const HAP_SEL='.fc .face-body, .fc .face, [data-act="fc-mark"], .fc-ctrl [data-act="flip"], .mq-opt:not([disabled]), [data-act="mq-check"]:not([disabled]), [data-act="mq-next"]';
+const HAP_SEL='.fc .face-body, .fc .face, [data-act="fc-mark"], .fc-ctrl [data-act="flip"], .mq-opt:not([disabled]), [data-act="mq-check"]:not([disabled]), [data-act="mq-next"], [data-act="learn-mcq"]:not([disabled]), [data-act="learn-next"], [data-act="t-mcq"]:not([disabled]), [data-act="t-tf"]:not([disabled]), [data-act="star"], .mq-star';
 function hapDecorate(){if(!hapOn()){$$(".hap").forEach(l=>l.remove());return;}
  $$(HAP_SEL).forEach(el=>{if(el.querySelector(":scope > .hap"))return;const l=document.createElement("label");l.className="hap";l.setAttribute("aria-hidden","true");
   const i=document.createElement("input");i.type="checkbox";i.setAttribute("switch","");i.tabIndex=-1;i.addEventListener("click",e=>e.stopPropagation());l.appendChild(i);
-  el.classList.add("hap-host");if(el.matches(".face-body,.face"))l.classList.add("under");el.insertBefore(l,el.firstChild);});}
+  el.classList.add("hap-host");if(getComputedStyle(el).position==="static")el.classList.add("hap-rel");if(el.matches(".face-body,.face"))l.classList.add("under");el.insertBefore(l,el.firstChild);});}
 {const _r=render;render=function(){const r=_r.apply(this,arguments);try{hapDecorate();}catch(e){}return r;};}
 {const _s=softRender;softRender=function(){const r=_s.apply(this,arguments);try{hapDecorate();}catch(e){}return r;};}
 document.addEventListener("click",e=>{if(!hapOn()||!navigator.vibrate||/iP(hone|ad|od)/.test(navigator.userAgent)||e.target.tagName==="INPUT")return;const t=e.target.closest&&e.target.closest(HAP_SEL);if(t)try{navigator.vibrate(8);}catch(er){}},true);
