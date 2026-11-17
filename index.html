@@ -5448,6 +5448,21 @@ function vSettings(){
 
 /* ================= highlighter ================= */
 const ha=(sid,card,side)=>sid&&card?` data-hl="${sid}|${card.id}|${side}"`:"";
+/* highlights from a file (import) or for a file (export): keep only valid term/def entries, fix offsets from the text,
+   stretch over $…$ formulas (a formula highlights as one piece), first one wins where two overlap. Bad data is skipped, never thrown. */
+function hlClean(raw,card){try{
+ if(!raw||typeof raw!=="object"||Array.isArray(raw))return null;const out={};
+ ["term","def"].forEach(side=>{const arr=raw[side];if(!Array.isArray(arr))return;const t=String((card&&card[side])||"");if(!t)return;const kept=[];
+  for(const r of arr.slice(0,300)){if(!r||typeof r!=="object")continue;
+   const c=Number(r.c);if(!Number.isInteger(c)||c<1||c>3)continue;
+   const tt=typeof r.t==="string"?r.t:"";if(!tt)continue;
+   let st=Number(r.s),en=Number(r.e);
+   if(!(Number.isInteger(st)&&Number.isInteger(en)&&st>=0&&en<=t.length&&t.slice(st,en)===tt)){const i=t.indexOf(tt);if(i<0)continue;st=i;en=i+tt.length;}
+   mathPieces(t).forEach(p=>{if(p.tex!=null&&p.s<en&&p.e>st){st=Math.min(st,p.s);en=Math.max(en,p.e);}});
+   if(kept.some(k=>k.s<en&&k.e>st))continue;
+   kept.push({s:st,e:en,c,t:t.slice(st,en)});}
+  if(kept.length)out[side]=kept.sort((a,b)=>a.s-b.s);});
+ return Object.keys(out).length?out:null;}catch(e){return null;}}
 function getRanges(card,side){const t=(card&&card[side])||"";const arr=(card&&card.hl&&card.hl[side])||[];const out=[];arr.forEach(r=>{let s=r.s,e=r.e;if(!r.t)return;if(t.slice(s,e)!==r.t){const i=t.indexOf(r.t);if(i<0)return;s=i;e=i+r.t.length;}out.push({s,e,c:r.c,t:r.t});});out.sort((a,b)=>a.s-b.s);return out;}
 let hlFresh=null;
 /* ---- formulas: $…$ in any card text is LaTeX, rendered with MathLive ---- */
@@ -6521,7 +6536,7 @@ async function exportSets(ids){
  const fids=uniq(sets.map(s=>s.folderId||""));const folder=fids.length===1&&fids[0]?getFolder(fids[0]):null;
  toast("Preparing export…");
  const out={format:PACK,version:1,exported:Date.now(),folder:folder?folder.name:null,sets:[]};
- for(const s of sets){const cards=[];for(const c of s.cards){const o={term:c.term,def:c.def};if(c.starred)o.starred=true;
+ for(const s of sets){const cards=[];for(const c of s.cards){const o={term:c.term,def:c.def};if(c.starred)o.starred=true;{const hl=hlClean(c.hl,c);if(hl)o.hl=hl;}
    if(c.img){try{const r=await fetch(imgSrc(c.img));if(r.ok)o.img=await blobToDataURL(await r.blob());}catch(e){}}cards.push(o);}
   out.sets.push({title:s.title,desc:s.desc||"",tags:s.tags||[],cards});}
  const name=(sets.length===1?sets[0].title:folder?folder.name:`${sets.length} sets`).replace(/[\\/:*?"<>|]+/g,"-").slice(0,80)+".flashcards";
@@ -6541,7 +6556,7 @@ async function importPackInto(p,parentId){
  if(!p||p.format!==PACK||!Array.isArray(p.sets))return r;
  const folderId=p.folder?ensureFolder(p.folder,parentId):(parentId||null);r.folderId=folderId;
  for(const ps of p.sets){const cards=[];
-  for(const c of ps.cards||[]){const card={id:uid(),term:String(c.term||""),def:String(c.def||""),starred:!!c.starred};
+  for(const c of ps.cards||[]){const card={id:uid(),term:String(c.term||""),def:String(c.def||""),starred:!!c.starred};{const hl=hlClean(c.hl,card);if(hl)card.hl=hl;}
    if(c.img&&/^data:image\//.test(c.img)){if(assetsApi){try{const b=await (await fetch(c.img)).blob();const res=await assetsApi.upload(b,{type:b.type});imgUrls[res.id]=res.url;card.img=res.id;}catch(e){r.lostImg++;}}else r.lostImg++;}
    if(card.term||card.def||card.img)cards.push(card);}
   if(!cards.length)continue;
