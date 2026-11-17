@@ -5718,7 +5718,7 @@ function openModal(html,onOk){modal={onOk};const m=$("#modal");m.innerHTML=`<div
 function confirmBox(title,msg,ok,fn){openModal(`<h2 class="h2">${esc(title)}</h2><p class="dim" style="margin:0">${esc(msg)}</p><div class="dialog-actions"><button class="btn ghost" data-act="modal-no">Cancel</button><button class="btn primary" data-act="modal-ok" id="modal-ok">${esc(ok)}</button></div>`,fn);}
 function promptBox(title,label,val,ok,fn){openModal(`<h2 class="h2">${esc(title)}</h2><form id="modal-form" class="sec" style="gap:12px"><label class="fgroup"><span class="eyebrow">${esc(label)}</span><input id="modal-input" class="inp" value="${esc(val)}" autocomplete="off"></label><div class="dialog-actions"><button type="button" class="btn ghost" data-act="modal-no">Cancel</button><button type="submit" class="btn primary" id="modal-ok">${esc(ok)}</button></div></form>`,()=>fn($("#modal-input").value.trim()));}
 function closeModal(){const m=$("#modal");if(m.hidden)return;const oc=modal&&modal.onClose;modal=null;if(oc)setTimeout(oc,0);m.classList.add("closing");setTimeout(()=>{if(!modal){m.hidden=true;m.innerHTML="";m.classList.remove("closing");}},160);}
-let toastT;function toast(t,o){const el=$("#toast");if(o&&o.action){el.innerHTML=`<span>${esc(t)}</span><button class="toast-act" data-act="${o.act}">${esc(o.action)}</button>`;}else el.textContent=t;el.classList.toggle("has-act",!!(o&&o.action));el.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove("show"),o&&o.action?6000:2400);}
+let toastT;function toast(t,o){const el=$("#toast");if(o&&o.action){el.innerHTML=`<span>${esc(t)}</span><button class="toast-act" data-act="${o.act}">${esc(o.action)}</button>`;}else el.textContent=t;el.classList.toggle("has-act",!!(o&&o.action));el.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove("show"),o&&o.ms?o.ms:o&&o.action?6000:2400);}
 
 function qText(s,q,key){const card=s.cards.find(c=>c.id===q.cardId);const side=q[key];if(!card||!side||card[side]!==(key==="side"?q.answer:q.prompt))return`<div>${fx(key==="side"?q.answer:q.prompt)}</div>`;return`<div${ha(s.id,card,side)}>${hx(card,side)}</div>${side==="def"&&card.img?`<img class="term-img" src="${esc(imgSrc(card.img))}" alt="Diagram for ${esc(card.term)}" data-act="img-zoom" loading="lazy">`:""}`;}
 
@@ -6492,9 +6492,13 @@ Object.assign(MQA,{
  "mq-fsub":el=>{const p=mqFolder(el.dataset.id);if(!p)return;closeModal();setTimeout(()=>promptBox(`New folder in “${p.name}”`,"Name","","Create",name=>{name=String(name||"").trim().slice(0,80);if(!name)return;const f={id:uid(),name,parentId:p.id,order:mqFKids(p.id).length,created:Date.now()};state.mqf.push(f);saveMqFolder(f);mqOpenAnc(p.id);render();}),250);},
  "mq-fmove":el=>{const f=mqFolder(el.dataset.id);if(!f)return;const cur=mqFParent(f);openModal(`<h2 class="h2">Move “${esc(f.name)}”</h2><div class="mq-menu"><button class="btn ${!cur?"primary":""}" data-act="mq-fmove-to" data-id="${f.id}" data-f="">Top level</button>${mqFolderPicker("mq-fmove-to",`data-id="${f.id}"`,cur,mqFDesc(f.id))}</div><div class="dialog-actions"><button class="btn ghost" data-act="modal-no">Cancel</button></div>`);},
  "mq-fmove-to":el=>{closeModal();mqMoveFolder(el.dataset.id,el.dataset.f||null);},
- "mq-fdel":el=>{const f=mqFolder(el.dataset.id);if(!f)return;closeModal();const up=mqFParent(f);setTimeout(()=>confirmBox(`Delete folder “${f.name}”?`,"Its banks and subfolders move up one level. No questions are deleted.","Delete",()=>{
-   state.mqb.filter(b=>b.folderId===f.id).forEach(b=>{b.folderId=up;mqSaveQuiet(b);});state.mqf.filter(x=>x.parentId===f.id).forEach(x=>{x.parentId=up;saveMqFolder(x);});
-   state.mqf=state.mqf.filter(x=>x.id!==f.id);queueWrite("mqf/"+f.id,null,true);render();toast("Folder deleted");}),250);},
+ "mq-fdel":el=>{const f=mqFolder(el.dataset.id);if(!f)return;closeModal();const ids=mqFDesc(f.id),banks=state.mqb.filter(b=>ids.includes(mqBFolder(b))),subN=ids.length-1,qN=banks.reduce((a,b)=>a+(b.qs||[]).length,0);
+  setTimeout(()=>confirmBox(`Delete “${f.name}” and everything in it?`,banks.length||subN?`${[plural(banks.length,"bank"),subN?plural(subN,"subfolder"):"",plural(qN,"question")].filter(Boolean).join(", ")} will be deleted, with their pictures and answer history. You can undo for a few seconds.`:"The folder is empty.","Delete everything",()=>{
+   folderUndoFinish();const bids=banks.map(b=>b.id);const snap={folders:ids.map(mqFolder).filter(Boolean).map(clean),banks:banks.map(clean),stats:state.mqs.filter(x=>bids.includes(x.id)).map(clean)};
+   state.mqb=state.mqb.filter(b=>!bids.includes(b.id));bids.forEach(id=>{mqSel.delete(id);queueWrite("mqb/"+id,null,true);});
+   if(snap.stats.length){state.mqs=state.mqs.filter(x=>!bids.includes(x.id));snap.stats.forEach(x=>queueWrite("mqs/"+x.id,null,true));}
+   state.mqf=state.mqf.filter(x=>!ids.includes(x.id));ids.forEach(id=>queueWrite("mqf/"+id,null,true));render();
+   folderUndoStart("mq",snap,banks.flatMap(mqImgIds),f.name);}),250);},
  "mq-export":el=>{closeModal();mqExport([el.dataset.id]);},
  "mq-star":el=>{const on=mqToggleStar(el.dataset.b,el.dataset.q);if(view.name==="mqrun")render();else softRender();toast(on?"Starred":"Star removed");},
  "mq-staronly":()=>{ui.mqStarOnly=!ui.mqStarOnly;saveUI();softRender();},
@@ -6525,6 +6529,15 @@ function hapDecorate(){if(!hapOn()){$$(".hap").forEach(l=>l.remove());return;}
 {const _s=softRender;softRender=function(){const r=_s.apply(this,arguments);try{hapDecorate();}catch(e){}return r;};}
 document.addEventListener("click",e=>{if(!hapOn()||!navigator.vibrate||/iP(hone|ad|od)/.test(navigator.userAgent)||e.target.tagName==="INPUT")return;const t=e.target.closest&&e.target.closest(HAP_SEL);if(t)try{navigator.vibrate(8);}catch(er){}},true);
 Object.assign(MQA,{"hap-toggle":()=>{state.settings.haptics=state.settings.haptics===false;saveSettings();hapDecorate();render();}});
+
+/* ---------- deleting a folder deletes everything inside it; Undo for 8 s (pictures are only removed once that's over) ---------- */
+let folderUndo=null;
+function folderUndoStart(kind,snap,imgs,name){folderUndo={kind,snap,imgs,timer:setTimeout(folderUndoFinish,8500)};toast(`Deleted “${name}”`,{action:"Undo",act:"folder-undo",ms:8000});}
+function folderUndoFinish(){const u=folderUndo;if(!u)return;folderUndo=null;clearTimeout(u.timer);deleteAssets(u.imgs);}
+Object.assign(MQA,{"folder-undo":()=>{const u=folderUndo;if(!u)return;folderUndo=null;clearTimeout(u.timer);const S=u.snap;
+ if(u.kind==="lib"){S.folders.forEach(f=>{state.folders.push(f);saveFolder(f);});S.sets.forEach(x=>{state.sets.push(x);queueWrite("sets/"+x.id,()=>getSet(x.id));});sortAll();}
+ else{S.folders.forEach(f=>{state.mqf.push(f);saveMqFolder(f);});S.banks.forEach(b=>{state.mqb.push(b);queueWrite("mqb/"+b.id,()=>state.mqb.find(x=>x.id===b.id));});S.stats.forEach(x=>{state.mqs.push(x);queueWrite("mqs/"+x.id,()=>state.mqs.find(y=>y.id===x.id));});}
+ render();toast("Folder restored");}});
 if(window.__FC_TEST){const T=window.__fcTest||(window.__fcTest={});Object.defineProperties(T,{mqSession:{get:()=>session},mqDraft:{get:()=>mqDraft}});T.mqImport=mqImport;T.saveMqBank=saveMqBank;T.mqRecord=mqRecord;T.mqSaveStats=mqSaveStats;T.queueWrite=queueWrite;T.mqExample=mqExample;T.mqPromptText=()=>mqPM&&mqPromptText();T.view=()=>view;}
 
 /* ================= import / export ================= */
@@ -6784,7 +6797,12 @@ const A={
  "sort-apply":el=>{closeSortMenu();applySort(el.dataset.scope||null,el.dataset.v);},
  "sort-undo":()=>undoSort(),
  "rename-folder":el=>{const f=getFolder(el.dataset.id);promptBox("Rename folder","Name",f.name,"Save",name=>{if(!name)return;f.name=name;saveFolder(f);render();});},
- "del-folder":el=>{const f=getFolder(el.dataset.id);confirmBox(`Delete folder “${f.name}”?`,"Its sets and subfolders move up one level. No cards are deleted.","Delete folder",()=>{state.sets.filter(s=>s.folderId===f.id).forEach(s=>{s.folderId=f.parentId||null;saveSet(s);});state.folders.filter(x=>x.parentId===f.id).forEach(x=>{x.parentId=f.parentId||null;saveFolder(x);});state.folders=state.folders.filter(x=>x.id!==f.id);deleteFolderDoc(f.id);render();toast("Folder deleted");});},
+ "del-folder":el=>{const f=getFolder(el.dataset.id);if(!f)return;const ids=descendantFolderIds(f.id),sets=state.sets.filter(s=>ids.includes(s.folderId)),subN=ids.length-1,cards=sets.reduce((a,s)=>a+s.cards.length,0);
+  confirmBox(`Delete “${f.name}” and everything in it?`,sets.length||subN?`${[plural(sets.length,"set"),subN?plural(subN,"subfolder"):"",plural(cards,"card")].filter(Boolean).join(", ")} will be deleted, with their pictures, highlights and review history. You can undo for a few seconds.`:"The folder is empty.","Delete everything",()=>{
+   folderUndoFinish();const snap={folders:ids.map(getFolder).filter(Boolean).map(clean),sets:sets.map(clean)};
+   state.sets=state.sets.filter(s=>!ids.includes(s.folderId));sets.forEach(s=>{libSel.delete(s.id);deleteSetDoc(s.id);});
+   state.folders=state.folders.filter(x=>!ids.includes(x.id));ids.forEach(id=>deleteFolderDoc(id));render();
+   folderUndoStart("lib",snap,sets.flatMap(setImgIds),f.name);});},
  "set-filter":el=>{setUI.filter=el.dataset.v;softRender();},
  "set-sort":el=>{setUI.sort=el.dataset.v;softRender();},
  star:el=>{const s=getSet(view.id);const c=s&&s.cards.find(x=>x.id===el.dataset.id);if(!c)return;c.starred=!c.starred;saveSet(s);$$(`[data-act="star"][data-id="${c.id}"]`).forEach(b=>{b.classList.toggle("on",c.starred);b.innerHTML=ic(c.starred?"starF":"star");});if(view.name==="set"&&!el.closest(".fc"))softRender();},
