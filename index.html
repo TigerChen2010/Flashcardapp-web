@@ -74,9 +74,10 @@
   --r-lg:12px; --r-md:8px; --r-sm:6px; --r-btn:7px;
   --ease:cubic-bezier(.2,.8,.2,1);
 }
-/* Espresso: Georgia for titles/headings/big numbers; the flip card keeps DM Serif Display */
+/* Espresso: Georgia for titles, headings, big numbers, the card front and the term list */
 :root:not([data-scheme]){--f-display:Georgia,"Times New Roman",serif}
-:root:not([data-scheme]) .fc{--f-display:"DM Serif Display",Georgia,serif}
+@media (max-width:420px){.mode-top .tog .tl{display:none}.mode-top .tog{padding-inline:10px}}
+:root:not([data-scheme]) .term .tt{font-family:var(--f-display);font-weight:400;font-size:1.08em}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#2B2B2B; --card:#333333; --card-2:#3A3938; --card-3:#42403E; --border:#4A4744;
   --text:#EDE6DE; --text-dim:#A89B8E; --text-faint:#6F6862;
@@ -4393,7 +4394,7 @@ const DESK=window.desktop||null;
 const WIN=!!(DESK&&DESK.platform!=="darwin");
 let deskWidget={}; /* Mac desktop widget: {allowed, pinned} from the app */
 const LS="flashcards.cloud.v2", LS_UI="flashcards.ui.v2";
-const DEF_SETTINGS={mq:false,dockIcon:true,theme:"system",scheme:"espresso",name:"",onboarded:false,defaultTarget:0.7,fcFront:"term",track:true,goal:30,notif:{enabled:true,time:"19:00",threshold:1,quietFrom:"22:30",quietTo:"07:00",streak:true,s1:"19:00",s2:"22:00"}};
+const DEF_SETTINGS={mq:false,learnShuffle:false,dockIcon:true,theme:"system",scheme:"espresso",name:"",onboarded:false,defaultTarget:0.7,fcFront:"term",track:true,goal:30,notif:{enabled:true,time:"19:00",threshold:1,quietFrom:"22:30",quietTo:"07:00",streak:true,s1:"19:00",s2:"22:00"}};
 const DEF_GAME={days:{},done:{},restored:{},restores:[],diamonds:0,bonus:{},best:0};
 let state={sets:[],folders:[],settings:JSON.parse(JSON.stringify(DEF_SETTINGS)),game:JSON.parse(JSON.stringify(DEF_GAME)),mqb:[],mqf:[],mqs:[]};
 /* MCQ Question bank: banks, MCQ folders, per-bank answer stats */
@@ -5584,7 +5585,7 @@ const lp=c=>c.learn||(c.learn={seen:false,level:0});
 function learnInit(s,opts){opts=opts||(session&&session.kind==="learn"?session.opts:{answerWith:"definition",mcq:true,written:true,starred:false});session={kind:"learn",setId:s.id,opts,round:0,queue:[],qi:0,q:null,fb:null,results:[],phase:"q",showOpts:false};learnRound(s);}
 const learnPool=s=>s.cards.filter(c=>!session.opts.starred||c.starred);
 function learnStats(s,cards){let m=0,l=0,n=0;cards.forEach(c=>{const p=lp(c);if(p.level>=2)m++;else if(p.seen)l++;else n++;});return{m,l,n,t:cards.length};}
-function learnRound(s){const rem=learnPool(s).filter(c=>lp(c).level<2);if(!rem.length){session.phase="done";return;}const learning=shuffle(rem.filter(c=>lp(c).seen)),fresh=rem.filter(c=>!lp(c).seen);session.queue=[...learning,...fresh].slice(0,7).map(c=>c.id);session.round++;session.qi=0;session.results=[];session.phase="q";learnQ(s);}
+function learnRound(s){const rem=learnPool(s).filter(c=>lp(c).level<2);if(!rem.length){session.phase="done";return;}const learning=shuffle(rem.filter(c=>lp(c).seen)),fresh0=rem.filter(c=>!lp(c).seen),fresh=state.settings.learnShuffle?shuffle(fresh0):fresh0;session.queue=[...learning,...fresh].slice(0,7).map(c=>c.id);session.round++;session.qi=0;session.results=[];session.phase="q";learnQ(s);}
 function learnQ(s){if(session.qi>=session.queue.length){session.phase="roundEnd";return;}const card=s.cards.find(c=>c.id===session.queue[session.qi]);if(!card){session.qi++;return learnQ(s);}const p=lp(card),o=session.opts;let type=((p.level===0&&o.mcq)||!o.written)?"mcq":"written";if(type==="mcq"&&s.cards.length<2)type="written";session.q=makeQ(s,card,type,o.answerWith);session.fb=null;}
 function learnSubmit(val){const s=getSet(view.id);if(!session||session.fb)return;const q=session.q;const correct=q.type==="mcq"?(val!==null&&q.options[val]===q.answer):gradeWritten(val,q.answer);
  const card=s.cards.find(c=>c.id===q.cardId);const p=lp(card);p.seen=true;if(correct)p.level=(q.type==="mcq"&&session.opts.written)?Math.max(p.level,1):2;else p.level=0;
@@ -5596,7 +5597,7 @@ function vLearn(){
  const s=getSet(view.id);if(!s)return"";
  if(!session||session.kind!=="learn")learnInit(s);
  const S=session,o=S.opts,pool=learnPool(s),st=learnStats(s,pool);
- const head=modeTop(s,"Learn",`<button class="btn sm" data-act="learn-opts">${ic("sliders",16)}Options</button>`);
+ const head=modeTop(s,"Learn",`<button class="tog ${state.settings.learnShuffle?"on":""}" data-act="learn-shuffle" aria-label="Shuffle" aria-pressed="${!!state.settings.learnShuffle}">${ic("shuffle",15)}<span class="tl">Shuffle</span></button><button class="btn sm" data-act="learn-opts">${ic("sliders",16)}Options</button>`);
  const prog=`<div class="sec" style="gap:8px"><div class="stack"><i class="sm" style="width:${st.t?st.m/st.t*100:0}%"></i><i class="sl" style="width:${st.t?st.l/st.t*100:0}%"></i></div><div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--text-dim);flex-wrap:wrap;gap:8px" class="mono"><span>Not studied ${st.n}</span><span>Learning ${st.l}</span><span style="color:var(--good)">Mastered ${st.m}/${st.t}</span></div></div>`;
  const optsPanel=S.showOpts?`<div class="panel rise"><div class="sec-head"><h3 class="h3">Learn options</h3><button class="btn icon ghost sm" data-act="learn-opts" aria-label="Close options">${ic("x",16)}</button></div><div class="opt-grid">
   <div class="fgroup"><span class="eyebrow">Answer with</span><div class="seg">${[["definition","Definition"],["term","Term"],["both","Both"]].map(([k,l])=>`<button class="${o.answerWith===k?"on":""}" data-act="learn-set" data-k="answerWith" data-v="${k}">${l}</button>`).join("")}</div></div>
@@ -6817,6 +6818,7 @@ const A={
  "fc-front":el=>{session.opts.front=el.dataset.v;state.settings.fcFront=el.dataset.v;saveSettings();session.flipped=false;render();},
  
  "fc-restart":()=>{const s=getSet(view.id);s.cards.forEach(c=>{c.fc=null;});saveSet(s);fcInit(s);render();},
+ "learn-shuffle":()=>{const s=getSet(view.id);if(!s)return;state.settings.learnShuffle=!state.settings.learnShuffle;saveSettings();learnInit(s,{...session.opts});render();toast(state.settings.learnShuffle?"Shuffle on: terms come in random order":"Shuffle off: terms come in set order");},
  "learn-opts":()=>{session.showOpts=!session.showOpts;render();},
  "learn-set":el=>{const s=getSet(view.id);learnInit(s,{...session.opts,[el.dataset.k]:el.dataset.v});session.showOpts=true;render();},
  "learn-chk":el=>{const s=getSet(view.id);const o={...session.opts,[el.dataset.k]:el.checked};if(!o.mcq&&!o.written){el.checked=true;toast("Keep at least one question type on");return;}learnInit(s,o);session.showOpts=true;render();},
